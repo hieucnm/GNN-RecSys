@@ -7,14 +7,15 @@ from logging_config import get_logger
 logger = get_logger(__file__)
 
 
-def presplit_data(item_feature_data,
-                  user_item_interaction_data,
+def presplit_data(user_item_interaction_data,
+                  item_feature_data,
                   num_min=3,
                   remove_unk=True,
                   sort=True,
                   test_size_days=14,
-                  item_id_type='ITEM IDENTIFIER',
-                  ctm_id_type='CUSTOMER IDENTIFIER'):
+                  item_id_column='item_id',
+                  user_id_column='user_id',
+                  date_column='hit_timestamp'):
     """
     Split data into train and test set.
 
@@ -31,9 +32,9 @@ def presplit_data(item_feature_data,
         the train set
     test_size_days:
         Number of days that should be in the test set. The rest will be in the training set.
-    ctm_id_type:
+    user_id_column:
         Unique identifier for the customers.
-    item_id_type:
+    item_id_column:
         Unique identifier for the items.
 
     Returns
@@ -48,37 +49,38 @@ def presplit_data(item_feature_data,
 
     if num_min > 0:
         user_item_interaction_data = user_item_interaction_data[
-            user_item_interaction_data[ctm_id_type].map(
-                user_item_interaction_data[ctm_id_type].value_counts()
+            user_item_interaction_data[user_id_column].map(
+                user_item_interaction_data[user_id_column].value_counts()
             ) >= num_min
         ]
 
-    if remove_unk:
-        known_items = item_feature_data[item_id_type].unique().tolist()
-        user_item_interaction_data = user_item_interaction_data[user_item_interaction_data[item_id_type].isin(known_items)]
+    # if remove_unk:
+    #     known_items = item_feature_data[item_id_column].unique().tolist()
+    #     user_item_interaction_data = user_item_interaction_data[user_item_interaction_data[item_id_column].isin(known_items)]
 
     if sort:
-        user_item_interaction_data.sort_values(by=['hit_timestamp'],
+        user_item_interaction_data.sort_values(by=[date_column],
                                                axis=0,
                                                inplace=True)
         # Split into train & test sets
-        most_recent_date = datetime.strptime(max(user_item_interaction_data.hit_date), '%Y-%m-%d')
+        most_recent_date = datetime.strptime(max(user_item_interaction_data[date_column]), '%Y-%m-%d')
         limit_date = datetime.strftime(
-            (most_recent_date - timedelta(days=int(test_size_days))),
+            most_recent_date - timedelta(days=test_size_days),
             format='%Y-%m-%d'
         )
-        train_set = user_item_interaction_data[user_item_interaction_data['hit_date'] <= limit_date]
-        test_set = user_item_interaction_data[user_item_interaction_data['hit_date'] > limit_date]
+        train_set = user_item_interaction_data[user_item_interaction_data[date_column] <= limit_date]
+        test_set = user_item_interaction_data[user_item_interaction_data[date_column] > limit_date]
 
     else:
-        most_recent_date = datetime.strptime(max(user_item_interaction_data.hit_date), '%Y-%m-%d')
-        oldest_date = datetime.strptime(min(user_item_interaction_data.hit_date), '%Y-%m-%d')
-        total_days = timedelta(days=(most_recent_date - oldest_date))  # To be tested
+        most_recent_date = datetime.strptime(max(user_item_interaction_data[date_column]), '%Y-%m-%d')
+        oldest_date = datetime.strptime(min(user_item_interaction_data[date_column]), '%Y-%m-%d')
+        total_days = timedelta(days=(most_recent_date - oldest_date).days)  # To be tested
         test_size = test_size_days / total_days
         test_set = user_item_interaction_data.sample(frac=test_size, random_state=200)
         train_set = user_item_interaction_data.drop(test_set.index)
 
     # Keep only users in train set
-    ctm_list = train_set[ctm_id_type].unique()
-    test_set = test_set[test_set[ctm_id_type].isin(ctm_list)]
+    ctm_list = train_set[user_id_column].unique()
+    test_set = test_set[test_set[user_id_column].isin(ctm_list)]
     return train_set, test_set
+

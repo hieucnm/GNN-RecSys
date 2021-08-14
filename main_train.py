@@ -88,14 +88,15 @@ def train_full_model(fixed_params_path,
     train_data_paths = TrainDataPaths()
     presplit_item_feat = read_data(train_data_paths.item_feat_path)
     full_interaction_data = read_data(train_data_paths.full_interaction_path)
-    train_df, test_df = presplit_data(presplit_item_feat,
-                                      full_interaction_data,
+    train_df, test_df = presplit_data(full_interaction_data,
+                                      presplit_item_feat,
                                       num_min=3,
                                       remove_unk=True,
                                       sort=True,
                                       test_size_days=1,
-                                      item_id_type='ITEM IDENTIFIER',
-                                      ctm_id_type='CUSTOMER IDENTIFIER', )
+                                      item_id_column='item_id',
+                                      user_id_column='user_id',
+                                      date_column="date")
     train_data_paths.train_path = train_df
     train_data_paths.test_path = test_df
     data = DataLoader(train_data_paths, fixed_params)
