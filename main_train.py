@@ -73,9 +73,11 @@ def train_full_model(fixed_params_path,
     """
     # Load parameters
     fixed_params = read_data(fixed_params_path)
+
     class objectview(object):
         def __init__(self, d):
             self.__dict__ = d
+
     fixed_params = objectview(fixed_params)
     fixed_params.remove = remove
     fixed_params.subtrain_size = 0.01
@@ -426,6 +428,7 @@ def main(fixed_params_path, params_path, visualization, check_embedding, remove,
                      remove=remove,
                      edge_batch_size=edge_batch_size,
                      **params)
+
 
 if __name__ == '__main__':
     main()

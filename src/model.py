@@ -370,11 +370,12 @@ class ConvModel(nn.Module):
         """
         super().__init__()
         self.embedding_layer = embedding_layer
-        if embedding_layer:
-            self.user_embed = NodeEmbedding(dim_dict['user'], dim_dict['hidden'])
-            self.item_embed = NodeEmbedding(dim_dict['item'], dim_dict['hidden'])
-            if 'sport' in g.ntypes:
-                self.sport_embed = NodeEmbedding(dim_dict['sport'], dim_dict['hidden'])
+        # if embedding_layer:
+        #     self.user_embed = NodeEmbedding(dim_dict['user'], dim_dict['hidden'])
+        #     self.item_embed = NodeEmbedding(dim_dict['item'], dim_dict['hidden'])
+        #     if 'sport' in g.ntypes:
+        #         self.sport_embed = NodeEmbedding(dim_dict['sport'], dim_dict['hidden'])
+        self.user_embed = NodeEmbedding(dim_dict['user'], dim_dict['hidden'])
 
         self.layers = nn.ModuleList()
 
@@ -459,11 +460,13 @@ class ConvModel(nn.Module):
             All score between negative examples.
 
         """
-        if embedding_layer:
-            h['user'] = self.user_embed(h['user'])
-            h['item'] = self.item_embed(h['item'])
-            if 'sport' in h.keys():
-                h['sport'] = self.sport_embed(h['sport'])
+        # if embedding_layer:
+        #     h['user'] = self.user_embed(h['user'])
+        #     h['item'] = self.item_embed(h['item'])
+        #     if 'sport' in h.keys():
+        #         h['sport'] = self.sport_embed(h['sport'])
+        h['user'] = self.user_embed(h['user'])
+
         h = self.get_repr(blocks, h)
         pos_score = self.pred_fn(pos_g, h)
         neg_score = self.pred_fn(neg_g, h)
