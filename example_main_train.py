@@ -78,8 +78,12 @@ def train_full_model(fixed_params_path,
                                         data,
                                         **params,
                                         )
-    print("valid_graph:")
-    print(valid_graph)
+
+    dim_dict = {'user': valid_graph.nodes['user'].data['features'].shape[1],
+                'out': params['out_dim'],
+                'hidden': params['hidden_dim']}
+    print("dim_dict:", dim_dict)
+
 
 
 @click.command()
@@ -97,7 +101,9 @@ def main(fixed_params_path, params_path, visualization, check_embedding, remove,
     # params.pop('remove', None)
     # params.pop('edge_batch_size', None)
     params = {
-        'use_recency': True
+        'use_recency': True,
+        'hidden_dim': 64,
+        'out_dim': 1
     }
     train_full_model(fixed_params_path=fixed_params_path,
                      visualization=visualization,

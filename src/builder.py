@@ -178,62 +178,58 @@ def create_graph(graph_schema,
     return g
 
 
-# def import_features(g: dgl.DGLHeteroGraph,
-#                     user_feat_df,
-#                     user_item_train,
-#                     iid_df: pd.DataFrame,
-#                     get_popularity: bool,
-#                     num_days_pop: int,
-#                     iid_column: str
-#                     ):
-#     """
-#     Import features to a dict for all node types.
-#
-#     Parameters
-#     ----------
-#     g:
-#         Our graph
-#     user_item_train, user_feat_df, iid_df, iid_column:
-#         See utils_data for details
-#     get_popularity, num_days_pop:
-#         The recommender system can be enhanced by giving score boost for items that were popular. If get_popularity,
-#         popularity of the items will be computed. Num_days_pop defines the number of days to include in the
-#         computation.
-#
-#     Returns
-#     -------
-#     features_dict:
-#         Dictionary with all the features imported here.
-#     """
-#     features_dict = {}
-#
-#     # User
-#     user_feat = user_feat_df.iloc[:, 1:]  # the first column should be user_id
-#     user_feat = torch.tensor(user_feat.values).float()
-#     features_dict['user_feat'] = user_feat
-#
-#     # Popularity
-#     # Commented by HieuCNM: I think this param isn't use in case of ad targeting
-#     #   so `get_popularity` should be false
-#     if get_popularity:
-#         item_popularity = np.zeros((g.number_of_nodes('item'), 1))
-#         pop_df = user_item_train.merge(iid_df,
-#                                        how='left',
-#                                        on=iid_column)
-#         most_recent_date = datetime.strptime(max(pop_df.hit_date), '%Y-%m-%d')
-#         limit_date = datetime.strftime(
-#             (most_recent_date - timedelta(days=num_days_pop)),
-#             format='%Y-%m-%d'
-#         )
-#         pop_df = pop_df[pop_df.hit_date >= limit_date]
-#         pop_df = pd.DataFrame(pop_df.pdt_new_id.value_counts())
-#         pop_df.columns = ['converts']
-#         pop_df['score'] = pop_df.converts / pop_df.converts.sum()
-#         pop_df.sort_index(inplace=True)
-#         ids = pop_df.index.values.astype(int)
-#         scores = pop_df.score.values
-#         item_popularity[ids] = np.expand_dims(scores, axis=1)
-#         item_popularity = torch.tensor(item_popularity).float()
-#         features_dict['item_pop'] = item_popularity
-#
-#     return features_dict
+def import_features(user_feat_df,
+                    uid_df: pd.DataFrame,
+                    uid_column: str,
+                    get_popularity=False,
+                    num_days_pop=None,
+                    ):
+    """
+    Import features to a dict for all node types.
+
+    Parameters
+    ----------
+    user_feat_df, uid_df, uid_column:
+        See utils_data for details
+    get_popularity, num_days_pop:
+        The recommender system can be enhanced by giving score boost for items that were popular. If get_popularity,
+        popularity of the items will be computed. Num_days_pop defines the number of days to include in the
+        computation.
+
+    Returns
+    -------
+    features_dict:
+        Dictionary with all the features imported here.
+    """
+    features_dict = {}
+
+    # User
+    train_uid = set(uid_df[uid_column])
+    user_feat = user_feat_df[user_feat_df[uid_column].isin(train_uid)].reset_index(drop=True)
+    user_feat = user_feat.iloc[:, 1:]  # the first column should be user_id
+    features_dict['user'] = torch.tensor(user_feat.values).float()
+
+    # Popularity
+    # Commented by HieuCNM: I think this param isn't use in case of ad targeting
+    # if get_popularity:
+    #     item_popularity = np.zeros((g.number_of_nodes('item'), 1))
+    #     pop_df = user_item_train.merge(iid_df,
+    #                                    how='left',
+    #                                    on=iid_column)
+    #     most_recent_date = datetime.strptime(max(pop_df.hit_date), '%Y-%m-%d')
+    #     limit_date = datetime.strftime(
+    #         (most_recent_date - timedelta(days=num_days_pop)),
+    #         format='%Y-%m-%d'
+    #     )
+    #     pop_df = pop_df[pop_df.hit_date >= limit_date]
+    #     pop_df = pd.DataFrame(pop_df.pdt_new_id.value_counts())
+    #     pop_df.columns = ['converts']
+    #     pop_df['score'] = pop_df.converts / pop_df.converts.sum()
+    #     pop_df.sort_index(inplace=True)
+    #     ids = pop_df.index.values.astype(int)
+    #     scores = pop_df.score.values
+    #     item_popularity[ids] = np.expand_dims(scores, axis=1)
+    #     item_popularity = torch.tensor(item_popularity).float()
+    #     features_dict['item_pop'] = item_popularity
+
+    return features_dict

@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import torch
 
-from src.builder import (create_ids, df_to_adjacency_list,
+from src.builder import (create_ids, df_to_adjacency_list, import_features,
                          filter_unseen_item, report_user_coverage)
 from src.utils import read_data
 
@@ -196,10 +196,10 @@ def assign_graph_features(graph,
         The input graph but with features assigned to its nodes and edges.
     """
     # Assign features
-    user_feat = data.user_feat_df.merge(data.user_id_df, how='inner', on=fixed_params.uid_column)
-    user_feat = user_feat.iloc[:, 1:]  # the first column should be user_id
-    user_feat = torch.tensor(user_feat.values).float()
-    graph.nodes['user'].data['features'] = user_feat
+    features_dict = import_features(data.user_feat_df,
+                                    data.user_id_df,
+                                    fixed_params.uid_column)
+    graph.nodes['user'].data['features'] = features_dict['user']
 
     # add date as edge feature
     date_col = fixed_params.date_column
