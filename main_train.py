@@ -84,19 +84,25 @@ def train_full_model(fixed_params_path,
     fixed_params.valid_size = 0.01
     fixed_params.edge_batch_size = edge_batch_size
 
+    # Add by HieuCNM
+    fixed_params.uid_column = 'user_id'
+    fixed_params.iid_column = 'item_id'
+    fixed_params.date_column = 'date'
+    fixed_params.conv_column = 'converted'
+    fixed_params.duplicates = 'count_occurrence'
+    fixed_params.discern_clicks = True
+
     # Create full train set
     train_data_paths = TrainDataPaths()
     presplit_item_feat = read_data(train_data_paths.item_feat_path)
     full_interaction_data = read_data(train_data_paths.full_interaction_path)
     train_df, test_df = presplit_data(full_interaction_data,
-                                      presplit_item_feat,
+                                      uid_column=fixed_params.uid_column,
+                                      date_column=fixed_params.date_column,
                                       num_min=3,
-                                      remove_unk=True,
-                                      sort=True,
                                       test_size_days=1,
-                                      item_id_column='item_id',
-                                      user_id_column='user_id',
-                                      date_column="date")
+                                      sort=True,
+                                      )
     train_data_paths.train_path = train_df
     train_data_paths.test_path = test_df
     data = DataLoader(train_data_paths, fixed_params)
@@ -342,14 +348,14 @@ def train_full_model(fixed_params_path,
                          ground_truth_purchase_dict,
                          data.item_feat_df,
                          fixed_params.num_choices,
-                         data.pdt_id,
+                         data.item_id_df,
                          fixed_params.item_id_type,
                          train_data_paths.result_filepath)
 
             if fixed_params.item_id_type == 'SPECIFIC ITEM IDENTIFIER':
                 coverage_metrics = check_coverage(data.user_item_train,
                                                   data.item_feat_df,
-                                                  data.pdt_id,
+                                                  data.item_id_df,
                                                   recs)
 
                 sentence = (
@@ -401,8 +407,8 @@ def train_full_model(fixed_params_path,
     save_graphs(f'models/{date}_graph.bin', [valid_graph])
     save_outputs(
         {
-            f'{date}_ctm_id': data.ctm_id,
-            f'{date}_pdt_id': data.pdt_id,
+            f'{date}_ctm_id': data.user_id_df,
+            f'{date}_pdt_id': data.item_id_df,
         },
         'models/'
     )

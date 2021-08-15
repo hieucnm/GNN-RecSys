@@ -241,53 +241,44 @@ class FixedParameters:
 class DataLoader:
     """Data loading, cleaning and pre-processing."""
 
-    def __init__(self, data_paths, fixed_params=None):
+    # noinspection PyTupleAssignmentBalance
+    def __init__(self, data_paths, fixed_params):
 
         self.data_paths = data_paths
         self.user_feat_df = read_data(data_paths.user_feat_path)
         self.user_item_train = read_data(data_paths.train_path)
         self.user_item_test = read_data(data_paths.test_path)
 
-        self.user_item_test = filter_unseen_item(self.user_item_train, self.user_item_test, "item_id")
-        report_user_coverage(self.user_item_train, self.user_item_test, "user_id")
+        self.user_item_test = filter_unseen_item(self.user_item_train, self.user_item_test, fixed_params.iid_column)
+        report_user_coverage(self.user_item_train, self.user_item_test, fixed_params.uid_column)
 
-        self.ctm_id, self.pdt_id, self.spt_id = create_ids(
-            self.user_item_train,
-            self.user_sport_interaction,
-            self.sport_sportg_interaction,
-            self.item_feat_df,
-            item_id_type=fixed_params.item_id_type,
-            ctm_id_type=fixed_params.ctm_id_type,
-            spt_id_type=fixed_params.spt_id_type,
-        )
+        self.user_id_df = create_ids(self.user_item_train, fixed_params.uid_column)
+        self.item_id_df = create_ids(self.user_item_train, fixed_params.iid_column)
 
         (
             self.adjacency_dict,
             self.ground_truth_test,
             self.ground_truth_purchase_test,
-            self.user_item_train_grouped,  # Will be grouped if duplicates != 'keep_all'. Used for recency edge feature
+            self.user_item_train_grouped
         ) = df_to_adjacency_list(
-            self.user_item_train,
-            self.user_item_test,
-            self.item_sport_interaction,
-            self.user_sport_interaction,
-            self.sport_sportg_interaction,
-            self.ctm_id,
-            self.pdt_id,
-            self.spt_id,
-            item_id_type=fixed_params.item_id_type,
-            ctm_id_type=fixed_params.ctm_id_type,
-            spt_id_type=fixed_params.spt_id_type,
+            user_item_train=self.user_item_train,
+            user_item_test=self.user_item_test,
+            user_id_df=self.user_id_df,
+            item_id_df=self.item_id_df,
+            uid_column=fixed_params.uid_column,
+            iid_column=fixed_params.iid_column,
+            date_column=fixed_params.date_column,
+            conv_column=fixed_params.conv_column,
             discern_clicks=fixed_params.discern_clicks,
-            duplicates=fixed_params.duplicates,
+            duplicates=fixed_params.duplicates
         )
 
         if fixed_params.discern_clicks:
             self.graph_schema = {
-                ('user', 'buys', 'item'):
-                    list(zip(self.adjacency_dict['purchases_src'], self.adjacency_dict['purchases_dst'])),
-                ('item', 'bought-by', 'user'):
-                    list(zip(self.adjacency_dict['purchases_dst'], self.adjacency_dict['purchases_src'])),
+                ('user', 'converts', 'item'):
+                    list(zip(self.adjacency_dict['convert_src'], self.adjacency_dict['convert_dst'])),
+                ('item', 'converted-by', 'user'):
+                    list(zip(self.adjacency_dict['convert_dst'], self.adjacency_dict['convert_src'])),
                 ('user', 'clicks', 'item'):
                     list(zip(self.adjacency_dict['clicks_src'], self.adjacency_dict['clicks_dst'])),
                 ('item', 'clicked-by', 'user'):
@@ -295,28 +286,11 @@ class DataLoader:
             }
         else:
             self.graph_schema = {
-                ('user', 'buys', 'item'):
+                ('user', 'converts', 'item'):
                     list(zip(self.adjacency_dict['user_item_src'], self.adjacency_dict['user_item_dst'])),
-                ('item', 'bought-by', 'user'):
+                ('item', 'converted-by', 'user'):
                     list(zip(self.adjacency_dict['user_item_dst'], self.adjacency_dict['user_item_src'])),
             }
-        if fixed_params.include_sport:
-            self.graph_schema.update(
-                {
-                    ('item', 'utilized-for', 'sport'):
-                        list(zip(self.adjacency_dict['item_sport_src'], self.adjacency_dict['item_sport_dst'])),
-                    ('sport', 'utilizes', 'item'):
-                        list(zip(self.adjacency_dict['item_sport_dst'], self.adjacency_dict['item_sport_src'])),
-                    ('user', 'practices', 'sport'):
-                        list(zip(self.adjacency_dict['user_sport_src'], self.adjacency_dict['user_sport_dst'])),
-                    ('sport', 'practiced-by', 'user'):
-                        list(zip(self.adjacency_dict['user_sport_dst'], self.adjacency_dict['user_sport_src'])),
-                    ('sport', 'belongs-to', 'sport'):
-                        list(zip(self.adjacency_dict['sport_sportg_src'], self.adjacency_dict['sport_sportg_dst'])),
-                    ('sport', 'includes', 'sport'):
-                        list(zip(self.adjacency_dict['sport_sportg_dst'], self.adjacency_dict['sport_sportg_src'])),
-                }
-            )
 
 
 def assign_graph_features(graph,
@@ -349,8 +323,8 @@ def assign_graph_features(graph,
         data.user_feat_df,
         data.item_feat_df,
         data.sport_onehot_df,
-        data.ctm_id,
-        data.pdt_id,
+        data.user_id_df,
+        data.item_id_df,
         data.spt_id,
         data.user_item_train,
         params['use_popularity'],

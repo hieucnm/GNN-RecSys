@@ -357,14 +357,14 @@ def train(data, fixed_params, data_paths,
                          ground_truth_purchase_dict,
                          data.item_feat_df,
                          fixed_params.num_choices,
-                         data.pdt_id,
+                         data.item_id_df,
                          fixed_params.item_id_type,
                          data_paths.result_filepath)
 
             if fixed_params.item_id_type == 'SPECIFIC ITEM_IDENTIFIER':
                 coverage_metrics = check_coverage(data.user_item_train,
                                                   data.item_feat_df,
-                                                  data.pdt_id,
+                                                  data.item_id_df,
                                                   recs)
 
                 sentence = (

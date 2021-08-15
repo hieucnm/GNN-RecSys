@@ -11,18 +11,18 @@ from src.utils import read_data
 
 def filter_unseen_item(train_path: str,
                        test_path: str,
-                       item_id_column: str = "item_id"):
+                       iid_column: str):
     train_data = read_data(train_path)
     test_data = read_data(test_path)
-    train_items = train_data[item_id_column].unique()
-    test_items = test_data[item_id_column].unique()
+    train_items = train_data[iid_column].unique()
+    test_items = test_data[iid_column].unique()
     diff_items = set(test_items).difference(train_items)
     print("--- Check to filter unseen items in test data ---")
     if len(diff_items) > 0:
         print(f"There are {len(diff_items)} items exist in test data but not exist in training data: "
               f"{diff_items}"
               f", interactions between them and any users are now removed from test data to prevent error.")
-        test_data = test_data[~test_data[item_id_column].isin(diff_items)].reset_index(drop=True)
+        test_data = test_data[~test_data[iid_column].isin(diff_items)].reset_index(drop=True)
     else:
         print("All items in test data already exist in training data")
     return test_data
@@ -30,11 +30,11 @@ def filter_unseen_item(train_path: str,
 
 def report_user_coverage(train_path: str,
                          test_path: str,
-                         user_id_column: str = "user_id"):
+                         uid_column: str):
     train_data = read_data(train_path)
     test_data = read_data(test_path)
-    train_users = train_data[user_id_column].unique()
-    test_users = test_data[user_id_column].unique()
+    train_users = train_data[uid_column].unique()
+    test_users = test_data[uid_column].unique()
     overlap_users = set(test_users).intersection(train_users)
     print('--- Report user coverage ---')
     print("# num train users =", len(train_users))
@@ -42,65 +42,34 @@ def report_user_coverage(train_path: str,
     print("# num test users existing in training data  =", len(overlap_users))
 
 
-def create_ids(user_item_train: pd.DataFrame,
-               user_sport_interaction: pd.DataFrame,
-               sport_sportg_interaction: pd.DataFrame,
-               item_feat_df,
-               item_id_type: str = 'SPECIFIC ITEM IDENTIFIER',
-               ctm_id_type: str = 'CUSTOMER IDENTIFIER',
-               spt_id_type: str = 'sport_id',
-               ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+def create_ids(df: pd.DataFrame,
+               id_column: str
+               ) -> pd.DataFrame:
     """
     Create ids needed for creating the graph (nodes cannot have arbitrary ids, i.e. it couldn't be directly
     the item identifier).
-
-    Parameters
-    ----------
-    See parameters and outputs of format_dfs for details.
-
+    
     Returns
     -------
-    ctm_id, pdt_id, spt_id:
-        Mapping between Organisation info (e.g. customer, item and sport ID) and new node ID.
+    id_map_df:
+        Mapping between Organisation info (e.g. user, item) and new node ID.
 
     """
 
-    # Create user ids
-    ctm_id = pd.DataFrame(user_item_train[ctm_id_type].unique(),
-                          columns=[ctm_id_type])
-    ctm_id['ctm_new_id'] = ctm_id.index
-
-    # Create item ids
-    train_pdt = user_item_train[item_id_type].unique().tolist()
-    all_pdt = item_feat_df[item_id_type].unique().tolist()
-    unseen_pdt = [pdt for pdt in all_pdt if pdt not in train_pdt]
-    train_pdt.extend(unseen_pdt)  # DGL requires that node IDs are continuous; unseen are at the end
-    pdt_id = pd.DataFrame(train_pdt,
-                          columns=[item_id_type])
-    pdt_id['pdt_new_id'] = pdt_id.index
-
-    # Create sport ids
-    unique_sports = np.append(sport_sportg_interaction.sports_id.unique(),
-                              sport_sportg_interaction.sportsgroup_id.unique())
-    unique_sports = np.unique(np.append(unique_sports,
-                                        user_sport_interaction[spt_id_type].unique()))
-    spt_id = pd.DataFrame(unique_sports, columns=[spt_id_type])
-    spt_id['spt_new_id'] = spt_id.index
-
-    return ctm_id, pdt_id, spt_id
+    id_new_col = f"{id_column}_new"
+    id_map_df = pd.DataFrame(df[id_column].unique(), columns=[id_column])
+    id_map_df[id_new_col] = id_map_df.index
+    return id_map_df
 
 
 def df_to_adjacency_list(user_item_train: pd.DataFrame,
                          user_item_test: pd.DataFrame,
-                         item_sport_interaction: pd.DataFrame,
-                         user_sport_interaction: pd.DataFrame,
-                         sport_sportg_interaction: pd.DataFrame,
-                         ctm_id: pd.DataFrame,
-                         pdt_id: pd.DataFrame,
-                         spt_id: pd.DataFrame,
-                         item_id_type: str,
-                         ctm_id_type: str,
-                         spt_id_type: str,
+                         user_id_df: pd.DataFrame,
+                         item_id_df: pd.DataFrame,
+                         uid_column: str,
+                         iid_column: str,
+                         date_column: str,
+                         conv_column: str = None,
                          discern_clicks: bool = False,
                          duplicates: str = 'keep_all'
                          ):
@@ -109,16 +78,24 @@ def df_to_adjacency_list(user_item_train: pd.DataFrame,
 
     Parameters
     ----------
+    user_item_train, user_item_test :
+        User - item interaction dataframe, for train and test respectively
+    user_id_df, item_id_df :
+        Dataframes containing 2 columns: original id and corresponding node id, of user and item respectively
+    uid_column, iid_column :
+        Column name of original id, of user and item respectively
+    date_column :
+        Column name containing time information of the interactions
+    conv_column :
+        Boolean column containing if a user converted or not
     discern_clicks, duplicates:
         See utils_data for details.
-    all other parameters:
-        See parameters & outputs of other functions in this file for details.
 
     Returns
     -------
     adjacency_dict:
         This will be used to build the graph. It contains id of source and destination nodes for all edge types.
-    ground_truth_test, ground_truth_purchase_test:
+    ground_truth_test, ground_truth_convert_test:
         This will be used to compute metrics (i.e. check if recommended items can be found in the ground_truth). It
         contains user and item ids for all interactions in the test set.
     user_item_train:
@@ -127,35 +104,29 @@ def df_to_adjacency_list(user_item_train: pd.DataFrame,
 
     """
     adjacency_dict = {}
-    # User item : join new ids with old ids
-    user_item_train = user_item_train.merge(ctm_id,
-                                            how='left',
-                                            on=ctm_id_type)
-    user_item_train = user_item_train.merge(pdt_id,
-                                            how='left',
-                                            on=item_id_type)
+    iid_new_col = f"{iid_column}_new"
+    uid_new_col = f"{uid_column}_new"
+    
+    user_item_train = user_item_train \
+        .merge(user_id_df, how='left', on=uid_column) \
+        .merge(item_id_df, how='left', on=iid_column)
 
     if duplicates in ['keep_last', 'count_occurrence']:
-        grouped_df = user_item_train.groupby(['buy', 'ctm_new_id', 'pdt_new_id']).specific_item_identifier.count()
-        grouped_df = pd.DataFrame(grouped_df).reset_index()
-        grouped_df.columns = ['buy', 'ctm_new_id', 'pdt_new_id', 'num_interaction']
+        grouped_df = user_item_train \
+            .groupby([uid_new_col, iid_new_col])[iid_new_col].count() \
+            .reset_index(name='num_interaction')
 
-        user_item_train.drop_duplicates(subset=['buy', 'ctm_new_id', 'pdt_new_id'],
-                                        keep='last',
-                                        inplace=True)  # Keep last interaction
-        user_item_train.sort_values(by=['buy', 'ctm_new_id', 'pdt_new_id'],
-                                    ignore_index=True,
-                                    inplace=True)  # Have same order as grouped_df
-        assert len(user_item_train) == len(grouped_df)
-        user_item_train['num_interaction'] = grouped_df.num_interaction.values
-        user_item_train.sort_values(by='hit_timestamp',
-                                    ignore_index=True,
-                                    inplace=True)  # Reorder by date to keep sequential order
+        user_item_train = user_item_train \
+            .drop_duplicates(subset=[uid_new_col, iid_new_col], keep='last') \
+            .reset_index(drop=True) \
+            .merge(grouped_df, on=[uid_new_col, iid_new_col]) \
+            .sort_values(by=date_column, ignore_index=True)
+        
         if discern_clicks:
             adjacency_dict.update(
                 {
-                    'clicks_num': user_item_train[user_item_train.buy == 0].num_interaction.values,
-                    'purchases_num': user_item_train[user_item_train.buy == 1].num_interaction.values
+                    'clicks_num': user_item_train[~user_item_train[conv_column]].num_interaction.values,
+                    'purchases_num': user_item_train[user_item_train[conv_column]].num_interaction.values
                 }
             )
         else:
@@ -168,73 +139,34 @@ def df_to_adjacency_list(user_item_train: pd.DataFrame,
     if discern_clicks:
         adjacency_dict.update(
             {
-                'clicks_src': user_item_train[user_item_train.buy == 0].ctm_new_id.values,
-                'clicks_dst': user_item_train[user_item_train.buy == 0].pdt_new_id.values,
-                'purchases_src': user_item_train[user_item_train.buy == 1].ctm_new_id.values,
-                'purchases_dst': user_item_train[user_item_train.buy == 1].pdt_new_id.values,
+                'clicks_src': user_item_train[~user_item_train[conv_column]][uid_new_col].values,
+                'clicks_dst': user_item_train[~user_item_train[conv_column]][iid_new_col].values,
+                'convert_src': user_item_train[user_item_train[conv_column]][uid_new_col].values,
+                'convert_dst': user_item_train[user_item_train[conv_column]][iid_new_col].values,
             }
         )
 
     else:
         adjacency_dict.update(
             {
-                'user_item_src': user_item_train.ctm_new_id.values,
-                'user_item_dst': user_item_train.pdt_new_id.values,
+                'user_item_src': user_item_train[uid_new_col].values,
+                'user_item_dst': user_item_train[iid_new_col].values,
             }
         )
 
-    user_item_test = user_item_test.merge(ctm_id,
-                                          how='left',
-                                          on=ctm_id_type)
-    user_item_test = user_item_test.merge(pdt_id,
-                                          how='left',
-                                          on=item_id_type)
-    test_purchase_src = user_item_test[user_item_test.buy == 1].ctm_new_id.values
-    test_purchase_dst = user_item_test[user_item_test.buy == 1].pdt_new_id.values
-    ground_truth_purchase_test = (test_purchase_src, test_purchase_dst)
+    user_item_test = user_item_test \
+        .merge(user_id_df, how='left', on=uid_column) \
+        .merge(item_id_df, how='left', on=iid_column)
+    
+    test_convert_src = user_item_test[user_item_test[conv_column]][uid_new_col].values
+    test_convert_dst = user_item_test[user_item_test[conv_column]][iid_new_col].values
+    ground_truth_convert_test = (test_convert_src, test_convert_dst)
 
-    test_src = user_item_test.ctm_new_id.values
-    test_dst = user_item_test.pdt_new_id.values
+    test_src = user_item_test[uid_new_col].values
+    test_dst = user_item_test[iid_new_col].values
     ground_truth_test = (test_src, test_dst)
 
-    # Item sport : merge new ids with old ids
-    item_sport_interaction = item_sport_interaction.merge(spt_id,
-                                                          how='left',
-                                                          on=spt_id_type)
-    item_sport_interaction = item_sport_interaction.merge(pdt_id,
-                                                          how='left',
-                                                          on=item_id_type)
-    item_sport_interaction.dropna(inplace=True)  # drop items with no sports associated
-
-    adjacency_dict['item_sport_src'] = item_sport_interaction.pdt_new_id.values
-    adjacency_dict['item_sport_dst'] = item_sport_interaction.spt_new_id.values
-
-    # User sport : merge new ids with old ids
-    user_sport_interaction = user_sport_interaction.merge(spt_id,
-                                                          how='left',
-                                                          on=spt_id_type)
-    user_sport_interaction = user_sport_interaction.merge(ctm_id,
-                                                          how='left',
-                                                          on=ctm_id_type)
-    user_sport_interaction.dropna(inplace=True)
-
-    adjacency_dict['user_sport_src'] = user_sport_interaction.ctm_new_id.values
-    adjacency_dict['user_sport_dst'] = user_sport_interaction.spt_new_id.values
-
-    # Sport sportgroups
-    sport_sportg_interaction = sport_sportg_interaction.merge(spt_id,
-                                                              how='left',
-                                                              left_on='sports_id',
-                                                              right_on=spt_id_type)
-    sport_sportg_interaction = sport_sportg_interaction.merge(spt_id,
-                                                              how='left',
-                                                              left_on='sportsgroup_id',
-                                                              right_on=spt_id_type)
-
-    adjacency_dict['sport_sportg_src'] = sport_sportg_interaction.spt_new_id_x.values
-    adjacency_dict['sport_sportg_dst'] = sport_sportg_interaction.spt_new_id_y.values
-
-    return adjacency_dict, ground_truth_test, ground_truth_purchase_test, user_item_train
+    return adjacency_dict, ground_truth_test, ground_truth_convert_test, user_item_train
 
 
 def create_graph(graph_schema,

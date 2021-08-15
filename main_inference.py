@@ -74,8 +74,8 @@ def inference_ondemand(user_ids,  # List or 'all'
                                        remove=remove, item_id_type=params['item_id_type'],
                                        duplicates=params['duplicates'])
         data = DataLoader(data_paths, fixed_params)
-        ctm_id_df = data.ctm_id
-        pdt_id_df = data.pdt_id
+        ctm_id_df = data.user_id_df
+        pdt_id_df = data.item_id_df
 
         graph = create_graph(
             data.graph_schema,

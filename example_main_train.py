@@ -30,14 +30,8 @@ num_workers = 4 if cuda else 0
 class TrainDataPaths:
     def __init__(self):
         self.result_filepath = 'result_log.txt'
-        # self.sport_feat_path = 'FEATURE DATASET, SPORTS (sport names) .csv'
         self.full_interaction_path = 'examples/user_item_clicks.csv'
-        # self.item_sport_path = 'INTERACTION LIST, ITEM-SPORT .csv'
-        # self.user_sport_path = 'INTERACTION LIST, USER-SPORT .csv'
-        # self.sport_sportg_path = 'INTERACTION LIST, SPORT-SPORT .csv'
-        # self.item_feat_path = 'FEATURE DATASET, ITEMS .csv'
         self.user_feat_path = 'examples/user_features.csv'
-        # self.sport_onehot_path = 'FEATURE DATASET, SPORTS (one-hot vectors) .csv'
 
 
 def train_full_model(fixed_params_path,
@@ -47,22 +41,33 @@ def train_full_model(fixed_params_path,
                      edge_batch_size,
                      **params,):
 
+    class objectview(object):
+        def __init__(self, d):
+            self.__dict__ = d
+
+    # fixed_params = objectview(read_data(fixed_params_path))
+    fixed_params = objectview()
+    fixed_params.uid_column = 'user_id'
+    fixed_params.iid_column = 'item_id'
+    fixed_params.date_column = 'date'
+    fixed_params.conv_column = 'converted'
+    fixed_params.duplicates = 'count_occurrence'
+    fixed_params.discern_clicks = True
+
     # Create full train set
     train_data_paths = TrainDataPaths()
     full_interaction_data = read_data(train_data_paths.full_interaction_path)
     train_df, test_df = presplit_data(full_interaction_data,
-                                      item_feature_data=None,
-                                      num_min=1,
-                                      remove_unk=True,
-                                      sort=True,
+                                      uid_column=fixed_params.uid_column,
+                                      date_column=fixed_params.date_column,
+                                      num_min=3,
                                       test_size_days=1,
-                                      item_id_column='item_id',
-                                      user_id_column='user_id',
-                                      date_column="date")
+                                      sort=True
+                                      )
 
     train_data_paths.train_path = train_df
     train_data_paths.test_path = test_df
-    data = DataLoader(train_data_paths, None)
+    data = DataLoader(train_data_paths, fixed_params)
 
 
 @click.command()
