@@ -46,7 +46,7 @@ def train_full_model(fixed_params_path,
             self.__dict__ = d
 
     # fixed_params = objectview(read_data(fixed_params_path))
-    fixed_params = objectview()
+    fixed_params = objectview({})
     fixed_params.uid_column = 'user_id'
     fixed_params.iid_column = 'item_id'
     fixed_params.date_column = 'date'
@@ -68,6 +68,13 @@ def train_full_model(fixed_params_path,
     train_data_paths.train_path = train_df
     train_data_paths.test_path = test_df
     data = DataLoader(train_data_paths, fixed_params)
+
+    valid_graph = create_graph(
+        data.graph_schema,
+    )
+
+    print("data loader initialized! Graph:")
+    print(valid_graph)
 
 
 @click.command()

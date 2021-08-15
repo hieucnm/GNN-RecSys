@@ -125,8 +125,8 @@ def df_to_adjacency_list(user_item_train: pd.DataFrame,
         if discern_clicks:
             adjacency_dict.update(
                 {
-                    'clicks_num': user_item_train[~user_item_train[conv_column]].num_interaction.values,
-                    'purchases_num': user_item_train[user_item_train[conv_column]].num_interaction.values
+                    'clicks_num': user_item_train[user_item_train[conv_column] == 0].num_interaction.values,
+                    'purchases_num': user_item_train[user_item_train[conv_column] == 1].num_interaction.values
                 }
             )
         else:
@@ -139,10 +139,10 @@ def df_to_adjacency_list(user_item_train: pd.DataFrame,
     if discern_clicks:
         adjacency_dict.update(
             {
-                'clicks_src': user_item_train[~user_item_train[conv_column]][uid_new_col].values,
-                'clicks_dst': user_item_train[~user_item_train[conv_column]][iid_new_col].values,
-                'convert_src': user_item_train[user_item_train[conv_column]][uid_new_col].values,
-                'convert_dst': user_item_train[user_item_train[conv_column]][iid_new_col].values,
+                'clicks_src': user_item_train[user_item_train[conv_column] == 0][uid_new_col].values,
+                'clicks_dst': user_item_train[user_item_train[conv_column] == 0][iid_new_col].values,
+                'convert_src': user_item_train[user_item_train[conv_column] == 1][uid_new_col].values,
+                'convert_dst': user_item_train[user_item_train[conv_column] == 1][iid_new_col].values,
             }
         )
 
@@ -158,8 +158,8 @@ def df_to_adjacency_list(user_item_train: pd.DataFrame,
         .merge(user_id_df, how='left', on=uid_column) \
         .merge(item_id_df, how='left', on=iid_column)
     
-    test_convert_src = user_item_test[user_item_test[conv_column]][uid_new_col].values
-    test_convert_dst = user_item_test[user_item_test[conv_column]][iid_new_col].values
+    test_convert_src = user_item_test[user_item_test[conv_column] == 1][uid_new_col].values
+    test_convert_dst = user_item_test[user_item_test[conv_column] == 1][iid_new_col].values
     ground_truth_convert_test = (test_convert_src, test_convert_dst)
 
     test_src = user_item_test[uid_new_col].values
