@@ -341,8 +341,7 @@ class ConvModel(nn.Module):
                  dropout: float = 0.0,
                  aggregator_type: str = 'mean',
                  pred: str = 'cos',
-                 aggregator_hetero: str = 'sum',
-                 embedding_layer: bool = True,
+                 aggregator_hetero: str = 'sum'
                  ):
         """
         Initialize the ConvModel.
@@ -369,25 +368,18 @@ class ConvModel(nn.Module):
 
         """
         super().__init__()
-        self.embedding_layer = embedding_layer
-        # if embedding_layer:
-        #     self.user_embed = NodeEmbedding(dim_dict['user'], dim_dict['hidden'])
-        #     self.item_embed = NodeEmbedding(dim_dict['item'], dim_dict['hidden'])
-        #     if 'sport' in g.ntypes:
-        #         self.sport_embed = NodeEmbedding(dim_dict['sport'], dim_dict['hidden'])
         self.user_embed = NodeEmbedding(dim_dict['user'], dim_dict['hidden'])
 
         self.layers = nn.ModuleList()
 
         # input layer
-        if not embedding_layer:
-            self.layers.append(
-                dglnn.HeteroGraphConv(
-                    {etype[1]: ConvLayer((dim_dict[etype[0]], dim_dict[etype[2]]), dim_dict['hidden'], dropout,
-                                         aggregator_type, norm)
-                     for etype in g.canonical_etypes},
-                    aggregate=aggregator_hetero)
-            )
+        self.layers.append(
+            dglnn.HeteroGraphConv(
+                {etype[1]: ConvLayer((dim_dict[etype[0]], dim_dict[etype[2]]), dim_dict['hidden'], dropout,
+                                     aggregator_type, norm)
+                 for etype in g.canonical_etypes if etype[0] == 'item'},
+                aggregate=aggregator_hetero)
+        )
 
         # hidden layers
         for i in range(n_layers - 2):
@@ -425,8 +417,7 @@ class ConvModel(nn.Module):
                 blocks,
                 h,
                 pos_g,
-                neg_g,
-                embedding_layer: bool = True,
+                neg_g
                 ):
         """
         Full pass through the ConvModel.
@@ -460,11 +451,6 @@ class ConvModel(nn.Module):
             All score between negative examples.
 
         """
-        # if embedding_layer:
-        #     h['user'] = self.user_embed(h['user'])
-        #     h['item'] = self.item_embed(h['item'])
-        #     if 'sport' in h.keys():
-        #         h['sport'] = self.sport_embed(h['sport'])
         h['user'] = self.user_embed(h['user'])
 
         h = self.get_repr(blocks, h)

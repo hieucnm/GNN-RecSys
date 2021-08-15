@@ -80,9 +80,19 @@ def train_full_model(fixed_params_path,
                                         )
 
     dim_dict = {'user': valid_graph.nodes['user'].data['features'].shape[1],
+                'item': params['hidden_dim'],
                 'out': params['out_dim'],
                 'hidden': params['hidden_dim']}
-    print("dim_dict:", dim_dict)
+
+    model = ConvModel(valid_graph,
+                      params['n_layers'],
+                      dim_dict,
+                      params['norm'],
+                      params['dropout'],
+                      params['aggregator_type'],
+                      params['pred'],
+                      params['aggregator_hetero']
+                      )
 
 
 
@@ -103,8 +113,15 @@ def main(fixed_params_path, params_path, visualization, check_embedding, remove,
     params = {
         'use_recency': True,
         'hidden_dim': 64,
-        'out_dim': 1
+        'out_dim': 1,
+        'n_layers': 3,
+        'dropout': 0.1,
+        'aggregator_type': 'mean',
+        'pred': 'cos',
+        'aggregator_hetero': 'mean',
+        'norm': True
     }
+
     train_full_model(fixed_params_path=fixed_params_path,
                      visualization=visualization,
                      check_embedding=check_embedding,
