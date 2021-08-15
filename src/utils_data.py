@@ -3,7 +3,7 @@ import pandas as pd
 import torch
 
 from src.builder import (create_ids, df_to_adjacency_list,
-                         import_features, filter_unseen_item, report_user_coverage)
+                         filter_unseen_item, report_user_coverage)
 from src.utils import read_data
 
 
@@ -116,128 +116,6 @@ class FixedParameters:
         # self.automatic_precision = False  # Removed implementation; not useful
 
 
-# class DataLoader:
-#     """Data loading, cleaning and pre-processing."""
-#
-#     def __init__(self, data_paths, fixed_params):
-#         self.data_paths = data_paths
-#         (
-#             self.user_item_train,
-#             self.user_item_test,
-#             self.item_sport_interaction,
-#             self.user_sport_interaction,
-#             self.sport_sportg_interaction,
-#             self.item_feat_df,
-#             self.user_feat_df,
-#             self.sport_feat_df,
-#             self.sport_onehot_df,
-#         ) = format_dfs(
-#             self.data_paths.train_path,
-#             self.data_paths.test_path,
-#             self.data_paths.item_sport_path,
-#             self.data_paths.user_sport_path,
-#             self.data_paths.sport_sportg_path,
-#             self.data_paths.item_feat_path,
-#             self.data_paths.user_feat_path,
-#             self.data_paths.sport_feat_path,
-#             self.data_paths.sport_onehot_path,
-#             fixed_params.remove,
-#             fixed_params.ctm_id_type,
-#             fixed_params.item_id_type,
-#             fixed_params.days_of_purchases,
-#             fixed_params.days_of_clicks,
-#             fixed_params.lifespan_of_items,
-#             fixed_params.report_model_coverage,
-#         )
-#         if fixed_params.report_model_coverage:
-#             print('Reporting model coverage')
-#             (_, _, _, _, _, _, _, _
-#              ) = format_dfs(
-#                 self.data_paths.train_path,
-#                 self.data_paths.test_path,
-#                 self.data_paths.item_sport_path,
-#                 self.data_paths.user_sport_path,
-#                 self.data_paths.sport_sportg_path,
-#                 self.data_paths.item_feat_path,
-#                 self.data_paths.user_feat_path,
-#                 self.data_paths.sport_feat_path,
-#                 0,  # remove 0
-#                 fixed_params.ctm_id_type,
-#                 fixed_params.item_id_type,
-#                 fixed_params.days_of_purchases,
-#                 fixed_params.days_of_clicks,
-#                 fixed_params.lifespan_of_items,
-#                 fixed_params.report_model_coverage,
-#             )
-#
-#         self.ctm_id, self.pdt_id, self.spt_id = create_ids(
-#             self.user_item_train,
-#             self.user_sport_interaction,
-#             self.sport_sportg_interaction,
-#             self.item_feat_df,
-#             item_id_type=fixed_params.item_id_type,
-#             ctm_id_type=fixed_params.ctm_id_type,
-#             spt_id_type=fixed_params.spt_id_type,
-#         )
-#
-#         (
-#             self.adjacency_dict,
-#             self.ground_truth_test,
-#             self.ground_truth_purchase_test,
-#             self.user_item_train_grouped,  # Will be grouped if duplicates != 'keep_all'. Used for recency edge feature
-#         ) = df_to_adjacency_list(
-#             self.user_item_train,
-#             self.user_item_test,
-#             self.item_sport_interaction,
-#             self.user_sport_interaction,
-#             self.sport_sportg_interaction,
-#             self.ctm_id,
-#             self.pdt_id,
-#             self.spt_id,
-#             item_id_type=fixed_params.item_id_type,
-#             ctm_id_type=fixed_params.ctm_id_type,
-#             spt_id_type=fixed_params.spt_id_type,
-#             discern_clicks=fixed_params.discern_clicks,
-#             duplicates=fixed_params.duplicates,
-#         )
-#
-#         if fixed_params.discern_clicks:
-#             self.graph_schema = {
-#                 ('user', 'buys', 'item'):
-#                     list(zip(self.adjacency_dict['purchases_src'], self.adjacency_dict['purchases_dst'])),
-#                 ('item', 'bought-by', 'user'):
-#                     list(zip(self.adjacency_dict['purchases_dst'], self.adjacency_dict['purchases_src'])),
-#                 ('user', 'clicks', 'item'):
-#                     list(zip(self.adjacency_dict['clicks_src'], self.adjacency_dict['clicks_dst'])),
-#                 ('item', 'clicked-by', 'user'):
-#                     list(zip(self.adjacency_dict['clicks_dst'], self.adjacency_dict['clicks_src'])),
-#             }
-#         else:
-#             self.graph_schema = {
-#                 ('user', 'buys', 'item'):
-#                     list(zip(self.adjacency_dict['user_item_src'], self.adjacency_dict['user_item_dst'])),
-#                 ('item', 'bought-by', 'user'):
-#                     list(zip(self.adjacency_dict['user_item_dst'], self.adjacency_dict['user_item_src'])),
-#             }
-#         if fixed_params.include_sport:
-#             self.graph_schema.update(
-#                 {
-#                     ('item', 'utilized-for', 'sport'):
-#                         list(zip(self.adjacency_dict['item_sport_src'], self.adjacency_dict['item_sport_dst'])),
-#                     ('sport', 'utilizes', 'item'):
-#                         list(zip(self.adjacency_dict['item_sport_dst'], self.adjacency_dict['item_sport_src'])),
-#                     ('user', 'practices', 'sport'):
-#                         list(zip(self.adjacency_dict['user_sport_src'], self.adjacency_dict['user_sport_dst'])),
-#                     ('sport', 'practiced-by', 'user'):
-#                         list(zip(self.adjacency_dict['user_sport_dst'], self.adjacency_dict['user_sport_src'])),
-#                     ('sport', 'belongs-to', 'sport'):
-#                         list(zip(self.adjacency_dict['sport_sportg_src'], self.adjacency_dict['sport_sportg_dst'])),
-#                     ('sport', 'includes', 'sport'):
-#                         list(zip(self.adjacency_dict['sport_sportg_dst'], self.adjacency_dict['sport_sportg_src'])),
-#                 }
-#             )
-
-
 class DataLoader:
     """Data loading, cleaning and pre-processing."""
 
@@ -318,60 +196,38 @@ def assign_graph_features(graph,
         The input graph but with features assigned to its nodes and edges.
     """
     # Assign features
-    features_dict = import_features(
-        graph,
-        data.user_feat_df,
-        data.item_feat_df,
-        data.sport_onehot_df,
-        data.user_id_df,
-        data.item_id_df,
-        data.spt_id,
-        data.user_item_train,
-        params['use_popularity'],
-        params['days_popularity'],
-        fixed_params.item_id_type,
-        fixed_params.ctm_id_type,
-        fixed_params.spt_id_type,
-    )
-
-    graph.nodes['user'].data['features'] = features_dict['user_feat']
-    graph.nodes['item'].data['features'] = features_dict['item_feat']
-    if 'sport' in graph.ntypes:
-        graph.nodes['sport'].data['features'] = features_dict['sport_feat']
+    user_feat = data.user_feat_df.merge(data.user_id_df, how='inner', on=fixed_params.uid_column)
+    user_feat = user_feat.iloc[:, 1:]  # the first column should be user_id
+    user_feat = torch.tensor(user_feat.values).float()
+    graph.nodes['user'].data['features'] = user_feat
 
     # add date as edge feature
+    date_col = fixed_params.date_column
+    conv_col = fixed_params.conv_column
     if params['use_recency']:
         df = data.user_item_train_grouped
-        df['max_date'] = max(df.hit_date)
-        df['days_recency'] = (pd.to_datetime(df.max_date) - pd.to_datetime(df.hit_date)).dt.days + 1
+        df['max_date'] = max(df[date_col])
+        df['days_recency'] = (pd.to_datetime(df.max_date) - pd.to_datetime(df[date_col])).dt.days + 1
         if fixed_params.discern_clicks:
-            recency_tensor_buys = torch.tensor(df[df.buy == 1].days_recency.values)
-            recency_tensor_clicks = torch.tensor(df[df.buy == 0].days_recency.values)
-            graph.edges['buys'].data['recency'] = recency_tensor_buys
-            graph.edges['bought-by'].data['recency'] = recency_tensor_buys
+            recency_tensor_buys = torch.tensor(df[df[conv_col] == 1].days_recency.values)
+            recency_tensor_clicks = torch.tensor(df[df[conv_col] == 0].days_recency.values)
+            graph.edges['converts'].data['recency'] = recency_tensor_buys
+            graph.edges['converted-by'].data['recency'] = recency_tensor_buys
             graph.edges['clicks'].data['recency'] = recency_tensor_clicks
             graph.edges['clicked-by'].data['recency'] = recency_tensor_clicks
         else:
             recency_tensor = torch.tensor(df.days_recency.values)
-            graph.edges['buys'].data['recency'] = recency_tensor
-            graph.edges['bought-by'].data['recency'] = recency_tensor
-
-    if params['use_popularity']:
-        graph.nodes['item'].data['popularity'] = features_dict['item_pop']
+            graph.edges['converts'].data['recency'] = recency_tensor
+            graph.edges['converted-by'].data['recency'] = recency_tensor
 
     if fixed_params.duplicates == 'count_occurrence':
         if fixed_params.discern_clicks:
             graph.edges['clicks'].data['occurrence'] = torch.tensor(data.adjacency_dict['clicks_num'])
             graph.edges['clicked-by'].data['occurrence'] = torch.tensor(data.adjacency_dict['clicks_num'])
-            graph.edges['buys'].data['occurrence'] = torch.tensor(data.adjacency_dict['purchases_num'])
-            graph.edges['bought-by'].data['occurrence'] = torch.tensor(data.adjacency_dict['purchases_num'])
+            graph.edges['converts'].data['occurrence'] = torch.tensor(data.adjacency_dict['converts_num'])
+            graph.edges['converted-by'].data['occurrence'] = torch.tensor(data.adjacency_dict['converts_num'])
         else:
-            graph.edges['buys'].data['occurrence'] = torch.tensor(data.adjacency_dict['user_item_num'])
-            graph.edges['bought-by'].data['occurrence'] = torch.tensor(data.adjacency_dict['user_item_num'])
+            graph.edges['converts'].data['occurrence'] = torch.tensor(data.adjacency_dict['user_item_num'])
+            graph.edges['converted-by'].data['occurrence'] = torch.tensor(data.adjacency_dict['user_item_num'])
 
     return graph
-
-
-
-
-

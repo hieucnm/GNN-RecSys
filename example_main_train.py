@@ -73,7 +73,12 @@ def train_full_model(fixed_params_path,
         data.graph_schema,
     )
 
-    print("data loader initialized! Graph:")
+    valid_graph = assign_graph_features(valid_graph,
+                                        fixed_params,
+                                        data,
+                                        **params,
+                                        )
+    print("valid_graph:")
     print(valid_graph)
 
 
@@ -91,7 +96,9 @@ def main(fixed_params_path, params_path, visualization, check_embedding, remove,
     # params = read_data(params_path)
     # params.pop('remove', None)
     # params.pop('edge_batch_size', None)
-    params = {}
+    params = {
+        'use_recency': True
+    }
     train_full_model(fixed_params_path=fixed_params_path,
                      visualization=visualization,
                      check_embedding=check_embedding,

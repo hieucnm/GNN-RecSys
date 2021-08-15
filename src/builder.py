@@ -126,7 +126,7 @@ def df_to_adjacency_list(user_item_train: pd.DataFrame,
             adjacency_dict.update(
                 {
                     'clicks_num': user_item_train[user_item_train[conv_column] == 0].num_interaction.values,
-                    'purchases_num': user_item_train[user_item_train[conv_column] == 1].num_interaction.values
+                    'converts_num': user_item_train[user_item_train[conv_column] == 1].num_interaction.values
                 }
             )
         else:
@@ -178,111 +178,62 @@ def create_graph(graph_schema,
     return g
 
 
-def import_features(g: dgl.DGLHeteroGraph,
-                    user_feat_df,
-                    item_feat_df,
-                    sport_onehot_df,
-                    ctm_id: pd.DataFrame,
-                    pdt_id: pd.DataFrame,
-                    spt_id: pd.DataFrame,
-                    user_item_train,
-                    get_popularity: bool,
-                    num_days_pop: int,
-                    item_id_type: str,
-                    ctm_id_type: str,
-                    spt_id_type: str,
-                    ):
-    """
-    Import features to a dict for all node types.
-
-    For user and item, initializes feature arrays with only 0, then fills the values if they are available.
-
-    Parameters
-    ----------
-    get_popularity, num_days_pop:
-        The recommender system can be enhanced by giving score boost for items that were popular. If get_popularity,
-        popularity of the items will be computed. Num_days_pop defines the number of days to include in the
-        computation.
-    item_id_type, ctm_id_type, spt_id_type:
-        See utils_data for details.
-    all other parameters:
-        See other functions in this file for details.
-
-    Returns
-    -------
-    features_dict:
-        Dictionary with all the features imported here.
-    """
-    features_dict = {}
-    # User
-    user_feat_df = user_feat_df.merge(ctm_id, how='inner', on=ctm_id_type)
-
-    ids = user_feat_df.ctm_new_id.values.astype(int)
-    feats = np.stack((user_feat_df.is_male.values,
-                      user_feat_df.is_female.values),
-                     axis=1)
-
-    user_feat = np.zeros((g.number_of_nodes('user'), 2))
-    user_feat[ids] = feats
-
-    user_feat = torch.tensor(user_feat).float()
-    features_dict['user_feat'] = user_feat
-
-    # Item
-    if item_id_type in ['SPECIFIC ITEM IDENTIFIER']:
-        item_feat_df = item_feat_df.merge(pdt_id,
-                                          how='left',
-                                          on=item_id_type)
-        item_feat_df = item_feat_df[item_feat_df.pdt_new_id < g.number_of_nodes('item')]  # Only IDs that are in graph
-
-        ids = item_feat_df.pdt_new_id.values.astype(int)
-        feats = np.stack((item_feat_df.is_junior.values,
-                          item_feat_df.is_male.values,
-                          item_feat_df.is_female.values,
-                          item_feat_df.eco_design.values,
-                          ),
-                         axis=1)
-
-        item_feat = np.zeros((g.number_of_nodes('item'), feats.shape[1]))
-        item_feat[ids] = feats
-        item_feat = torch.tensor(item_feat).float()
-    elif item_id_type in ['GENERAL ITEM IDENTIFIER']:
-        item_feat = torch.zeros((g.number_of_nodes('item'), 4))
-    else:
-        raise KeyError(f'Item ID {item_id_type} not recognized.')
-
-    features_dict['item_feat'] = item_feat
-
-    # Sport one-hot
-    if 'sport' in g.ntypes:
-        sport_onehot_df = sport_onehot_df.merge(spt_id, how='inner', on=spt_id_type)
-        sport_onehot_df.sort_values(by='spt_new_id',
-                                    inplace=True)  # Values need to be sorted by node id to align with g.nodes['sport']
-        feats = sport_onehot_df.drop(labels=[spt_id_type, 'spt_new_id'], axis=1).values
-        assert feats.shape[0] == g.num_nodes('sport')
-        sport_feat = torch.tensor(feats).float()
-        features_dict['sport_feat'] = sport_feat
-
-    # Popularity
-    if get_popularity:
-        item_popularity = np.zeros((g.number_of_nodes('item'), 1))
-        pop_df = user_item_train.merge(pdt_id,
-                                       how='left',
-                                       on=item_id_type)
-        most_recent_date = datetime.strptime(max(pop_df.hit_date), '%Y-%m-%d')
-        limit_date = datetime.strftime(
-            (most_recent_date - timedelta(days=num_days_pop)),
-            format='%Y-%m-%d'
-        )
-        pop_df = pop_df[pop_df.hit_date >= limit_date]
-        pop_df = pd.DataFrame(pop_df.pdt_new_id.value_counts())
-        pop_df.columns = ['purchases']
-        pop_df['score'] = pop_df.purchases / pop_df.purchases.sum()
-        pop_df.sort_index(inplace=True)
-        ids = pop_df.index.values.astype(int)
-        scores = pop_df.score.values
-        item_popularity[ids] = np.expand_dims(scores, axis=1)
-        item_popularity = torch.tensor(item_popularity).float()
-        features_dict['item_pop'] = item_popularity
-
-    return features_dict
+# def import_features(g: dgl.DGLHeteroGraph,
+#                     user_feat_df,
+#                     user_item_train,
+#                     iid_df: pd.DataFrame,
+#                     get_popularity: bool,
+#                     num_days_pop: int,
+#                     iid_column: str
+#                     ):
+#     """
+#     Import features to a dict for all node types.
+#
+#     Parameters
+#     ----------
+#     g:
+#         Our graph
+#     user_item_train, user_feat_df, iid_df, iid_column:
+#         See utils_data for details
+#     get_popularity, num_days_pop:
+#         The recommender system can be enhanced by giving score boost for items that were popular. If get_popularity,
+#         popularity of the items will be computed. Num_days_pop defines the number of days to include in the
+#         computation.
+#
+#     Returns
+#     -------
+#     features_dict:
+#         Dictionary with all the features imported here.
+#     """
+#     features_dict = {}
+#
+#     # User
+#     user_feat = user_feat_df.iloc[:, 1:]  # the first column should be user_id
+#     user_feat = torch.tensor(user_feat.values).float()
+#     features_dict['user_feat'] = user_feat
+#
+#     # Popularity
+#     # Commented by HieuCNM: I think this param isn't use in case of ad targeting
+#     #   so `get_popularity` should be false
+#     if get_popularity:
+#         item_popularity = np.zeros((g.number_of_nodes('item'), 1))
+#         pop_df = user_item_train.merge(iid_df,
+#                                        how='left',
+#                                        on=iid_column)
+#         most_recent_date = datetime.strptime(max(pop_df.hit_date), '%Y-%m-%d')
+#         limit_date = datetime.strftime(
+#             (most_recent_date - timedelta(days=num_days_pop)),
+#             format='%Y-%m-%d'
+#         )
+#         pop_df = pop_df[pop_df.hit_date >= limit_date]
+#         pop_df = pd.DataFrame(pop_df.pdt_new_id.value_counts())
+#         pop_df.columns = ['converts']
+#         pop_df['score'] = pop_df.converts / pop_df.converts.sum()
+#         pop_df.sort_index(inplace=True)
+#         ids = pop_df.index.values.astype(int)
+#         scores = pop_df.score.values
+#         item_popularity[ids] = np.expand_dims(scores, axis=1)
+#         item_popularity = torch.tensor(item_popularity).float()
+#         features_dict['item_pop'] = item_popularity
+#
+#     return features_dict
