@@ -136,7 +136,7 @@ def train_full_model(fixed_params_path,
                       params['aggregator_type'],
                       params['pred'],
                       params['aggregator_hetero'],
-                      params['embedding_layer'],
+                      # params['embedding_layer'],
                       )
     if cuda:
         model = model.to(device)

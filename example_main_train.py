@@ -93,6 +93,11 @@ def train_full_model(fixed_params_path,
                       params['pred'],
                       params['aggregator_hetero']
                       )
+    if cuda:
+        model = model.to(device)
+    print(model.eval())
+
+
 
 
 

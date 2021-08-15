@@ -369,6 +369,7 @@ class ConvModel(nn.Module):
         """
         super().__init__()
         self.user_embed = NodeEmbedding(dim_dict['user'], dim_dict['hidden'])
+        self.item_embed = NodeEmbedding(dim_dict['item'], dim_dict['hidden'])
 
         self.layers = nn.ModuleList()
 
@@ -377,7 +378,7 @@ class ConvModel(nn.Module):
             dglnn.HeteroGraphConv(
                 {etype[1]: ConvLayer((dim_dict[etype[0]], dim_dict[etype[2]]), dim_dict['hidden'], dropout,
                                      aggregator_type, norm)
-                 for etype in g.canonical_etypes if etype[0] == 'item'},
+                 for etype in g.canonical_etypes},
                 aggregate=aggregator_hetero)
         )
 
@@ -452,6 +453,7 @@ class ConvModel(nn.Module):
 
         """
         h['user'] = self.user_embed(h['user'])
+        h['item'] = self.item_embed(h['item'])
 
         h = self.get_repr(blocks, h)
         pos_score = self.pred_fn(pos_g, h)
