@@ -9,174 +9,37 @@ import torch
 from src.utils import read_data
 
 
-def format_dfs(
-        train_path,  # str (path) or pd.Dataframe directly (df)
-        test_path,  # str (path) or pd.Dataframe directly (df)
-        item_sport_path: str,
-        user_sport_path: str,
-        sport_sportg_path: str,
-        item_feat_path: str,
-        user_feat_path: str,
-        sport_feat_path: str,
-        sport_onehot_path: str,
-        remove: float = 0.,
-        ctm_id_type: str = 'CUSTOMER IDENTIFIER',
-        item_id_type: str = 'SPECIFIC ITEM IDENTIFIER',
-        days_of_purchases: int = 710,
-        days_of_clicks: int = 710,
-        lifespan_of_items: int = 710,
-        report_model_coverage: bool = False,
-):
-    """
-    Import all dfs from csv paths and preprocess interactions to sample interactions and remove old users and items.
-
-    Parameters
-    ----------
-    train_path, test_path:
-        Paths of interaction files, between user and items (in the train set and the test set). To accommodate a wider
-        range of utilisation, train_path and test_path can be directly dataframes instead of strings. All files with
-        user and items must include a column named with the specified ctm_id_type or item_id_type.
-    item_sport_path, user_sport_path, sport_sportg_path:
-        Paths of interaction files, between item and sport, user and sport, sport and sport group. All files with user
-        and items must include a column named with the specified ctm_id_type or item_id_type.
-    item_feat_path, user_feat_path, sport_feat_path:
-        Paths of feature files, for item, user and sports. Item features include textual descriptions and junior, male,
-        female and eco indicators. User features include male and female indicator. Sport features include only name of
-        sport. All files with user and items must include a column named with the specified ctm_id_type or item_id_type.
-    sport_onehot_path:
-        Path for a csv matrix containing the sport_id and a one-hot vector, unique per sport.
-    remove:
-        Removes a proportion of users from the dataset randomly.
-    ctm_id_type :
-        Identifier for the customers.
-    item_id_type :
-        Identifier for the items. Can be SPECIFIC ITEM IDENTIFIER (e.g. item SKU)
-        or GENERAL ITEM IDENTIFIER (e.g. item family identifier)
-    days_of_purchases (Days_of_clicks) :
-            Number of days of purchases (clicks) that should be kept in the dataset.
-            Intuition is that interactions of 12+ months ago might not be relevant. Max is 710 days
-            Those that do not have any remaining interactions will be fed recommendations from another
-            model.
-    lifespan_of_items :
-        Number of days since most recent transactions for an item to be considered by the
-        model. Max is 710 days. Won't make a difference is it is > Days_of_interaction.
-    report_model_coverage : bool
-        Computes how many users are included by these parameters (and would thus receive a recommendation by this GNN
-        model).
-
-    Returns
-    -------
-    user_item_train, user_item_test, user_sport_interaction, item_sport_interaction, sport_sportg_interaction:
-        Dataframes of interactions.
-    item_feat_df, user_feat_df, sport_feat_df, sport_onehot_df:
-        Dataframes of features.
-    """
-    np.random.seed(11)
-
-    # User, item and sport features
-    item_feat_df = read_data(item_feat_path)
-    user_feat_df = read_data(user_feat_path)
-    sport_feat_df = read_data(sport_feat_path)
-    sport_onehot_df = read_data(sport_onehot_path)
-
-    # User-item interaction. We allow direct df instead of path: check which was passed.
-    if isinstance(train_path, str):
-        user_item_train = read_data(train_path)
-    elif isinstance(train_path, pd.DataFrame):
-        user_item_train = train_path
+def filter_unseen_item(train_path: str,
+                       test_path: str,
+                       item_id_column: str = "item_id"):
+    train_data = read_data(train_path)
+    test_data = read_data(test_path)
+    train_items = train_data[item_id_column].unique()
+    test_items = test_data[item_id_column].unique()
+    diff_items = set(test_items).difference(train_items)
+    print("--- Check to filter unseen items in test data ---")
+    if len(diff_items) > 0:
+        print(f"There are {len(diff_items)} items exist in test data but not exist in training data: "
+              f"{diff_items}"
+              f", interactions between them and any users are now removed from test data to prevent error.")
+        test_data = test_data[~test_data[item_id_column].isin(diff_items)].reset_index(drop=True)
     else:
-        raise TypeError(f'Type of {train_path} not recognized. Should be str or pd.DataFrame')
-    if isinstance(test_path, str):
-        user_item_test = read_data(test_path)
-    elif isinstance(test_path, pd.DataFrame):
-        user_item_test = test_path
-    else:
-        raise TypeError(f'Type of {test_path} not recognized. Should be str or pd.DataFrame')
-
-    if days_of_purchases < 710:
-        most_recent_date = datetime.strptime(max(user_item_train.hit_date), '%Y-%m-%d')
-        limit_date = datetime.strftime(
-            (most_recent_date - timedelta(days=int(days_of_purchases))),
-            format='%Y-%m-%d'
-        )
-        user_item_train = user_item_train[(user_item_train.hit_date >= limit_date) | (user_item_train.buy == 0)]
-
-    if days_of_clicks < 710:
-        most_recent_date = datetime.strptime(max(user_item_train.hit_date), '%Y-%m-%d')
-        limit_date = datetime.strftime(
-            (most_recent_date - timedelta(days=int(days_of_clicks))),
-            format='%Y-%m-%d'
-        )
-        user_item_train = user_item_train[(user_item_train.hit_date >= limit_date) | (user_item_train.buy == 1)]
-
-    if lifespan_of_items < days_of_purchases:
-        most_recent_date = datetime.strptime(max(user_item_train.hit_date), '%Y-%m-%d')
-        limit_date = datetime.strftime(
-            (most_recent_date - timedelta(days=int(lifespan_of_items))),
-            format='%Y-%m-%d'
-        )
-        item_list = user_item_train[user_item_train.hit_date >= limit_date]['SPECIFIC ITEM IDENTIFIER'].unique()
-        user_item_train = user_item_train[user_item_train['SPECIFIC ITEM IDENTIFIER'].isin(item_list)]
-
-    if remove > 0:
-        ctm_list = user_item_train[ctm_id_type].unique()
-        np.random.shuffle(ctm_list)
-        ctm_list = ctm_list[:int(len(ctm_list) * (1 - remove))]
-        user_item_train = user_item_train[user_item_train[ctm_id_type].isin(ctm_list)]
-        user_item_test = user_item_test[user_item_test[ctm_id_type].isin(ctm_list)]
-
-    if remove == 0:
-        # Make sure that if no observations were removed by days of clicks / purchases, no user is only in test set
-        user_item_test = user_item_test[user_item_test[ctm_id_type].isin(user_item_train[ctm_id_type].unique())]
-
-    if item_id_type == 'GENERAL ITEM IDENTIFIER':
-        user_item_train = user_item_train.merge(
-            item_feat_df[['SPECIFIC ITEM IDENTIFIER', 'GENERAL ITEM IDENTIFIER']].drop_duplicates(),
-            how='left',
-            on='SPECIFIC ITEM IDENTIFIER')
-        user_item_test = user_item_test.merge(
-            item_feat_df[['SPECIFIC ITEM IDENTIFIER', 'GENERAL ITEM IDENTIFIER']].drop_duplicates(),
-            how='left',
-            on='SPECIFIC ITEM IDENTIFIER')
-        assert user_item_train.general_item_identifier.isna().sum() == 0
-        assert user_item_test.general_item_identifier.isna().sum() == 0
+        print("All items in test data already exist in training data")
+    return test_data
 
 
-    # Item-sport interaction
-    item_sport_interaction = read_data(item_sport_path)
-    if lifespan_of_items < days_of_purchases:
-        item_sport_interaction = item_sport_interaction[item_sport_interaction['SPECIFIC ITEM IDENTIFIER'].isin(
-            item_list)]
-    if item_id_type == 'GENERAL ITEM IDENTIFIER':
-        item_sport_interaction = item_sport_interaction.merge(
-            item_feat_df[['SPECIFIC ITEM IDENTIFIER', 'GENERAL ITEM IDENTIFIER']],
-                                                              how='left',
-                                                              on='SPECIFIC ITEM IDENTIFIER')
-    # Drop duplicates if not item_id_type not model number
-    item_sport_interaction.drop_duplicates(inplace=True)
-
-
-    # User-sport interaction
-    user_sport_interaction = read_data(user_sport_path)
-    if remove > 0:
-        user_sport_interaction = user_sport_interaction[user_sport_interaction[ctm_id_type].isin(ctm_list)]
-
-    # Sport-sportgroups interaction
-    sport_sportg_interaction = read_data(sport_sportg_path)
-
-    if report_model_coverage:
-        train_users = user_item_train[ctm_id_type].unique().tolist()
-        test_users = user_item_test[ctm_id_type].unique().tolist()
-        sport_users = user_sport_interaction[ctm_id_type].unique().tolist()
-        unseen_users = [uid for uid in test_users if uid not in train_users]
-        print(f'There are {len(unseen_users)} users with no interactions')
-        train_users.extend(sport_users)
-        unseen_users = [uid for uid in test_users if uid not in train_users]
-        print(f'and {len(unseen_users)} with also no sports associated')
-        print(f'out of {len(test_users)}')
-
-    return user_item_train, user_item_test, item_sport_interaction, user_sport_interaction, \
-           sport_sportg_interaction, item_feat_df, user_feat_df, sport_feat_df, sport_onehot_df
+def report_user_coverage(train_path: str,
+                         test_path: str,
+                         user_id_column: str = "user_id"):
+    train_data = read_data(train_path)
+    test_data = read_data(test_path)
+    train_users = train_data[user_id_column].unique()
+    test_users = test_data[user_id_column].unique()
+    overlap_users = set(test_users).intersection(train_users)
+    print('--- Report user coverage ---')
+    print("# num train users =", len(train_users))
+    print("# num test users  =", len(test_users))
+    print("# num test users existing in training data  =", len(overlap_users))
 
 
 def create_ids(user_item_train: pd.DataFrame,

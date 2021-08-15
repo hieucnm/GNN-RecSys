@@ -36,10 +36,13 @@ def read_data(file_path):
     """
     Generic function to read any kind of data. Extensions supported: '.gz', '.csv', '.pkl'
     """
+    if isinstance(file_path, pd.DataFrame):
+        return file_path
+
     if file_path.endswith('.gz'):
         obj = pd.read_csv(file_path, compression='gzip',
-                     header=0, sep=';', quotechar='"',
-                     error_bad_lines=False)
+                          header=0, sep=';', quotechar='"',
+                          error_bad_lines=False)
     elif file_path.endswith('.csv'):
         obj = pd.read_csv(file_path)
     elif file_path.endswith('.pkl'):

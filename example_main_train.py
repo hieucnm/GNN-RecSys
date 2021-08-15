@@ -59,7 +59,10 @@ def train_full_model(fixed_params_path,
                                       item_id_column='item_id',
                                       user_id_column='user_id',
                                       date_column="date")
-    
+
+    train_data_paths.train_path = train_df
+    train_data_paths.test_path = test_df
+    data = DataLoader(train_data_paths, None)
 
 
 @click.command()
