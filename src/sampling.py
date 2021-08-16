@@ -57,6 +57,10 @@ def train_valid_split(valid_graph: dgl.DGLHeteroGraph,
         all_eids_dict[etype] = all_eids
         if (etype == ('user', 'converts', 'item')) or (etype == ('user', 'clicks', 'item') and train_on_clicks):
             valid_eids_dict[etype] = valid_eids
+
+    # added by HieuCNM: Cẩn thậ, chỗ này đang lấy tất cả relationship (ở đây là click và conv) làm nhãn,
+    #   nếu sau này dùng tới zalo_friend, thì phải loại các edge này ra, chỉ dùng click và conv là nhãn,
+    #   nếu không, model sẽ học luôn smilarity của các user có zalo_friend -> không đúng
     ground_truth_valid = (np.array(valid_uids_all), np.array(valid_iids_all))
     valid_uids = np.array(np.unique(valid_uids_all))
 
@@ -87,6 +91,7 @@ def train_valid_split(valid_graph: dgl.DGLHeteroGraph,
 
     # Generate inference nodes for subtrain & ground truth for subtrain
     # Step 1: Choose the subsample of training set. For now, only users with purchases are included.
+    # Chỗ này chú ý: etypes[0] là ('user', 'converts', 'item') trong fixed_params
     train_uids, train_iids = valid_graph.find_edges(train_eids_dict[etypes[0]], etype=etypes[0])
     unique_train_uids = np.unique(train_uids)
     subtrain_uids = np.random.choice(unique_train_uids, int(len(unique_train_uids) * subtrain_size), replace=False)

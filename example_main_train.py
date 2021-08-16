@@ -119,6 +119,16 @@ def train_full_model(fixed_params_path,
         params['converts_sample'],
     )
 
+    # print("valid_graph:", valid_graph)
+    # print("train_graph:", train_graph)
+    # print("train_eids_dict:", len(train_eids_dict[('user', 'clicks', 'item')]))
+    # print("valid_eids_dict:", len(valid_eids_dict[('user', 'clicks', 'item')]))
+    # print("subtrain_uids:", len(subtrain_uids))
+    # print("valid_uids:", len(valid_uids))
+    # print("test_uids:", len(test_uids))
+
+
+
 
 @click.command()
 @click.option('--fixed_params_path', default='fixed_params.pkl',
