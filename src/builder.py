@@ -36,7 +36,7 @@ def report_user_coverage(train_path: str,
     train_users = train_data[uid_column].unique()
     test_users = test_data[uid_column].unique()
     overlap_users = set(test_users).intersection(train_users)
-    print('--- Report user coverage ---')
+    print('--- Dataframes loaded successfully! User coverage: ---')
     print("# num train users =", len(train_users))
     print("# num test users  =", len(test_users))
     print("# num test users existing in training data  =", len(overlap_users))

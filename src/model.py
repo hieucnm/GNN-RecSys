@@ -368,20 +368,12 @@ class ConvModel(nn.Module):
 
         """
         super().__init__()
+
+        # input layer
         self.user_embed = NodeEmbedding(dim_dict['user'], dim_dict['hidden'])
         self.item_embed = NodeEmbedding(dim_dict['item'], dim_dict['hidden'])
 
         self.layers = nn.ModuleList()
-
-        # input layer
-        self.layers.append(
-            dglnn.HeteroGraphConv(
-                {etype[1]: ConvLayer((dim_dict[etype[0]], dim_dict[etype[2]]), dim_dict['hidden'], dropout,
-                                     aggregator_type, norm)
-                 for etype in g.canonical_etypes},
-                aggregate=aggregator_hetero)
-        )
-
         # hidden layers
         for i in range(n_layers - 2):
             self.layers.append(

@@ -1,3 +1,4 @@
+import math
 import numpy as np
 import pandas as pd
 import torch
@@ -101,7 +102,6 @@ class FixedParameters:
         # added by HieuCNM
         self.date_column = 'date'
         self.conv_column = 'converted'
-        self.out_dim = 1
 
         # self.dropout = .5  # HP
         # self.norm = False  # HP
@@ -130,7 +130,7 @@ class DataLoader:
         self.user_item_test = read_data(data_paths.test_path)
 
         self.user_item_test = filter_unseen_item(self.user_item_train, self.user_item_test, fixed_params.iid_column)
-        # report_user_coverage(self.user_item_train, self.user_item_test, fixed_params.uid_column)
+        report_user_coverage(self.user_item_train, self.user_item_test, fixed_params.uid_column)
 
         self.user_id_df = create_ids(self.user_item_train, fixed_params.uid_column)
         self.item_id_df = create_ids(self.user_item_train, fixed_params.iid_column)
@@ -233,3 +233,43 @@ def assign_graph_features(graph,
             graph.edges['converted-by'].data['occurrence'] = torch.tensor(data.adjacency_dict['user_item_num'])
 
     return graph
+
+
+def calculate_batch_sizes(train_eids_dict,
+                          valid_eids_dict,
+                          subtrain_uids,
+                          valid_uids,
+                          test_uids,
+                          all_iids,
+                          fixed_params):
+    train_eids_len = 0
+    valid_eids_len = 0
+    for etype in train_eids_dict.keys():
+        train_eids_len += len(train_eids_dict[etype])
+        valid_eids_len += len(valid_eids_dict[etype])
+    num_batches_train = math.ceil(train_eids_len / fixed_params.edge_batch_size)
+    num_batches_subtrain = math.ceil(
+        (len(subtrain_uids) + len(all_iids)) / fixed_params.node_batch_size
+    )
+    num_batches_val_loss = math.ceil(valid_eids_len / fixed_params.edge_batch_size)
+    num_batches_val_metrics = math.ceil(
+        (len(valid_uids) + len(all_iids)) / fixed_params.node_batch_size
+    )
+    num_batches_test = math.ceil(
+        (len(test_uids) + len(all_iids)) / fixed_params.node_batch_size
+    )
+    return num_batches_train, num_batches_subtrain, num_batches_test, \
+           num_batches_val_loss, num_batches_val_metrics
+
+
+def print_data_loaders(train_eids_dict, valid_eids_dict, subtrain_uids, valid_uids, test_uids,
+                       all_iids, ground_truth_subtrain, ground_truth_valid, all_eids_dict):
+    print("train_eids_dict.keys:", train_eids_dict.keys())
+    print("valid_eids_dict.keys:", valid_eids_dict.keys())
+    print("subtrain_uids:", len(subtrain_uids))
+    print("valid_uids:", len(valid_uids))
+    print("test_uids:", len(test_uids))
+    print("all_iids:", len(all_iids))
+    print("ground_truth_subtrain:", len(ground_truth_subtrain))
+    print("ground_truth_valid:", len(ground_truth_valid))
+    print("all_eids_dict.keys:", all_eids_dict.keys())

@@ -8,6 +8,16 @@ from src.metrics import get_metrics_at_k
 from src.utils import save_txt
 
 
+def print_one_batch(batch):
+    tensors, pos_g, neg_g, blocks = batch
+    print("tensors.keys:", tensors.keys())
+    print("x.item:", tensors['item'].shape)
+    print("x.user:", tensors['user'].shape)
+    print("pos_g:", pos_g)
+    print("neg_g:", neg_g)
+    print("blocks:", blocks)
+
+
 def train_model(model,
                 num_epochs,
                 num_batches_train,
@@ -42,7 +52,6 @@ def train_model(model,
                 use_popularity=False,
                 weight_popularity=1,
                 remove_false_negative=False,
-                embedding_layer=True,
                 ):
     """
     Main function to train a GNN, using max margin loss on positive and negative examples.
@@ -75,8 +84,7 @@ def train_model(model,
     patience_counter = 0  # For early stopping
     min_loss = 1.1
 
-    opt = optimizer(model.parameters(),
-                    lr=lr)
+    opt = optimizer(model.parameters(), lr=lr)
 
     # TRAINING
     print('Starting training.')
@@ -87,6 +95,10 @@ def train_model(model,
         i = 0
         total_loss = 0
         for _, pos_g, neg_g, blocks in edgeloader_train:
+            # print out what inside a batch, remember to break
+            # print_one_batch((_, pos_g, neg_g, blocks))
+            # break
+
             opt.zero_grad()
 
             # Negative mask
@@ -118,8 +130,7 @@ def train_model(model,
             _, pos_score, neg_score = model(blocks,
                                             input_features,
                                             pos_g,
-                                            neg_g,
-                                            embedding_layer,
+                                            neg_g
                                             )
             loss = loss_fn(pos_score,
                            neg_score,
@@ -177,7 +188,6 @@ def train_model(model,
                                                 input_features,
                                                 pos_g,
                                                 neg_g,
-                                                embedding_layer,
                                                 )
                 # recency (TO BE CLEANED)
                 recency_scores = None
@@ -213,8 +223,7 @@ def train_model(model,
                                    nodeloader_subtrain,
                                    num_batches_subtrain,
                                    cuda,
-                                   device,
-                                   embedding_layer,
+                                   device
                                    )
 
                 train_precision, train_recall, train_coverage = get_metrics_at_k(y,
@@ -240,7 +249,6 @@ def train_model(model,
                                    num_batches_val_metrics,
                                    cuda,
                                    device,
-                                   embedding_layer,
                                    )
 
                 val_precision, val_recall, val_coverage = get_metrics_at_k(y,
@@ -314,8 +322,7 @@ def get_embeddings(g,
                    nodeloader_test,
                    num_batches_valid: int,
                    cuda: bool = False,
-                   device=None,
-                   embedding_layer: bool = True):
+                   device=None):
     """
     Fetch the embeddings for all the nodes in the nodeloader.
 
@@ -338,11 +345,8 @@ def get_embeddings(g,
         if cuda:
             blocks = [b.to(device) for b in blocks]
         input_features = blocks[0].srcdata['features']
-        if embedding_layer:
-            input_features['user'] = trained_model.user_embed(input_features['user'])
-            input_features['item'] = trained_model.item_embed(input_features['item'])
-            if 'sport' in input_features.keys():
-                input_features['sport'] = trained_model.sport_embed(input_features['sport'])
+        input_features['user'] = trained_model.user_embed(input_features['user'])
+        input_features['item'] = trained_model.item_embed(input_features['item'])
         h = trained_model.get_repr(blocks, input_features)
         for ntype in h.keys():
             y[ntype][output_nodes[ntype]] = h[ntype]
