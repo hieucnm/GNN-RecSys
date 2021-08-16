@@ -5,9 +5,9 @@ import click
 import numpy as np
 import torch
 from dgl.data.utils import save_graphs
+from dgl import heterograph
 
-from src.builder import create_graph
-from src.utils_data import DataLoader, assign_graph_features, print_data_loaders, calculate_batch_sizes
+from src.utils_data import DataLoader, assign_graph_features, print_data_loaders, calculate_num_batches
 from src.utils import read_data, save_txt, save_outputs
 from src.model import ConvModel, max_margin_loss
 from src.sampling import train_valid_split, generate_dataloaders
@@ -64,9 +64,7 @@ def train_full_model(fixed_params_path,
     data = DataLoader(train_data_paths, fixed_params)
 
     # Create whole graph (train, valid, test)
-    valid_graph = create_graph(
-        data.graph_schema,
-    )
+    valid_graph = heterograph(data.graph_schema)
 
     valid_graph = assign_graph_features(valid_graph,
                                         fixed_params,
@@ -132,7 +130,7 @@ def train_full_model(fixed_params_path,
         num_batches_test,
         num_batches_val_loss,
         num_batches_val_metrics
-    ) = calculate_batch_sizes(train_eids_dict,
+    ) = calculate_num_batches(train_eids_dict,
                               valid_eids_dict,
                               subtrain_uids,
                               valid_uids,
@@ -142,7 +140,8 @@ def train_full_model(fixed_params_path,
 
     # Init model
     dim_dict = {'user': valid_graph.nodes['user'].data['features'].shape[1],
-                'item': params['hidden_dim'],
+                # 'item': params['hidden_dim'],
+                'n_item': data.item_id_df.shape[0],
                 'out': params['out_dim'],
                 'hidden': params['hidden_dim']}
 

@@ -180,7 +180,9 @@ def create_graph(graph_schema,
 
 def import_features(user_feat_df,
                     uid_df: pd.DataFrame,
+                    iid_df:pd.DataFrame,
                     uid_column: str,
+                    iid_column: str,
                     get_popularity=False,
                     num_days_pop=None,
                     ):
@@ -189,7 +191,7 @@ def import_features(user_feat_df,
 
     Parameters
     ----------
-    user_feat_df, uid_df, uid_column:
+    user_feat_df, uid_df, iid_df, uid_column, iid_column:
         See utils_data for details
     get_popularity, num_days_pop:
         The recommender system can be enhanced by giving score boost for items that were popular. If get_popularity,
@@ -203,11 +205,14 @@ def import_features(user_feat_df,
     """
     features_dict = {}
 
-    # User
+    # User features
     train_uid = set(uid_df[uid_column])
     user_feat = user_feat_df[user_feat_df[uid_column].isin(train_uid)].reset_index(drop=True)
     user_feat = user_feat.iloc[:, 1:]  # the first column should be user_id
     features_dict['user'] = torch.tensor(user_feat.values).float()
+
+    # Item features: no features, just item_id to get embedding
+    features_dict['item'] = torch.LongTensor(iid_df[f'{iid_column}_new'].values)
 
     # Popularity
     # Commented by HieuCNM: I think this param isn't use in case of ad targeting

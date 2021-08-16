@@ -200,8 +200,11 @@ def assign_graph_features(graph,
     # Assign features
     features_dict = import_features(data.user_feat_df,
                                     data.user_id_df,
-                                    fixed_params.uid_column)
+                                    data.item_id_df,
+                                    fixed_params.uid_column,
+                                    fixed_params.iid_column)
     graph.nodes['user'].data['features'] = features_dict['user']
+    graph.nodes['item'].data['features'] = features_dict['item']
 
     # add date as edge feature
     date_col = fixed_params.date_column
@@ -235,7 +238,7 @@ def assign_graph_features(graph,
     return graph
 
 
-def calculate_batch_sizes(train_eids_dict,
+def calculate_num_batches(train_eids_dict,
                           valid_eids_dict,
                           subtrain_uids,
                           valid_uids,

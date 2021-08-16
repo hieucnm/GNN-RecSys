@@ -120,7 +120,7 @@ def train_model(model,
 
             i += 1
             if i % 10 == 0:
-                print("Edge batch {} out of {}".format(i, num_batches_train))
+                print("Edge batch {}/{}".format(i, num_batches_train))
             input_features = blocks[0].srcdata['features']
             # recency (TO BE CLEANED)
             recency_scores = None
@@ -163,7 +163,7 @@ def train_model(model,
             for _, pos_g, neg_g, blocks in edgeloader_valid:
                 i += 1
                 if i % 10 == 0:
-                    print("Edge batch {} out of {}".format(i, num_batches_val_loss))
+                    print("Edge batch {}/{}".format(i, num_batches_val_loss))
 
                 # Negative mask
                 negative_mask = {}

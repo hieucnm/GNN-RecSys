@@ -371,7 +371,8 @@ class ConvModel(nn.Module):
 
         # input layer
         self.user_embed = NodeEmbedding(dim_dict['user'], dim_dict['hidden'])
-        self.item_embed = NodeEmbedding(dim_dict['item'], dim_dict['hidden'])
+        # self.item_embed = NodeEmbedding(dim_dict['item'], dim_dict['hidden'])
+        self.item_embed = nn.Embedding(dim_dict['n_item'], dim_dict['hidden'])
 
         self.layers = nn.ModuleList()
         # hidden layers

@@ -123,7 +123,7 @@ def get_metrics_at_k(h,
     """
     Function combining all previous functions: create already_bought & ground_truth dict, get recs and compute metrics.
     """
-    already_bought_dict = create_already_bought(g, bought_eids)
+    already_bought_dict = create_already_bought(g, bought_eids, etype='converts')
     users, items = ground_truth
     user_ids = np.unique(users).tolist()
     ground_truth_dict = create_ground_truth(users, items)
