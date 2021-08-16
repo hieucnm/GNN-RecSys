@@ -168,9 +168,7 @@ def inference_fn(trained_model,
                                     trained_model,
                                     nodeloader_test,
                                     num_batches_test,
-                                    cuda,
                                     device,
-                                    params['embedding_layer'],
                                     )
 
         for ground_truth in [data.ground_truth_purchase_test, data.ground_truth_test]:
@@ -183,7 +181,6 @@ def inference_fn(trained_model,
                 all_eids_dict[('user', 'buys', 'item')],
                 fixed_params.k,
                 True,  # Remove already bought
-                cuda,
                 device,
                 fixed_params.pred,
                 params['use_popularity'],

@@ -36,7 +36,6 @@ def get_recs(g,
              user_ids,
              already_bought_dict,
              remove_already_bought=True,
-             cuda=False,
              device=None,
              pred: str = 'cos',
              use_popularity: bool = False,
@@ -45,6 +44,7 @@ def get_recs(g,
     """
     Computes K recommendation for all users, given hidden states, the model and what they already bought.
     """
+    cuda = device is not None and device.type != 'cpu'
     if cuda:  # model is already in cuda?
         model = model.to(device)
     print('Computing recommendations on {} users, for {} items'.format(len(user_ids), g.num_nodes('item')))
@@ -115,7 +115,6 @@ def get_metrics_at_k(h,
                      bought_eids,
                      k,
                      remove_already_bought=True,
-                     cuda=False,
                      device=None,
                      pred='cos',
                      use_popularity=False,
@@ -128,7 +127,7 @@ def get_metrics_at_k(h,
     user_ids = np.unique(users).tolist()
     ground_truth_dict = create_ground_truth(users, items)
     recs = get_recs(g, h, model, embed_dim, k, user_ids, already_bought_dict,
-                    remove_already_bought, cuda, device, pred, use_popularity, weight_popularity)
+                    remove_already_bought, device, pred, use_popularity, weight_popularity)
     precision, recall, coverage = recs_to_metrics(recs, ground_truth_dict, g)
     
     return precision, recall, coverage

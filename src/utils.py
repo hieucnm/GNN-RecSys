@@ -2,6 +2,9 @@ import os
 import numpy as np
 import pandas as pd
 import pickle
+import datetime as dt
+import torch
+from dgl.data.utils import save_graphs
 
 
 def save_txt(data_to_save, filepath, mode='a'):
@@ -59,3 +62,28 @@ def softmax(x):
     """
     e_x = np.exp(x - np.max(x))
     return e_x / e_x.sum()
+
+
+def save_everything(trained_model, graph, data, params, fixed_params):
+    timestamp = str(dt.datetime.now()).replace(' ', '')
+    torch.save(trained_model.state_dict(), f'models/{timestamp}.pth')
+    # Save all necessary params
+    save_outputs(
+        {
+            f'{timestamp}_params': params,
+            f'{timestamp}_fixed_params': vars(fixed_params),
+        },
+        'models/'
+    )
+    print("Saved model & parameters to disk.")
+
+    # Save graph & ID mapping
+    save_graphs(f'models/{timestamp}_graph.bin', [graph])
+    save_outputs(
+        {
+            f'{timestamp}_user_id': data.user_id_df,
+            f'{timestamp}_item_id': data.item_id_df,
+        },
+        'models/'
+    )
+    print("Saved graph & ID mapping to disk.")

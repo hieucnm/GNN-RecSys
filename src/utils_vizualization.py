@@ -1,3 +1,5 @@
+import json
+
 import matplotlib.pyplot as plt
 from datetime import datetime
 import textwrap
@@ -11,6 +13,8 @@ def plot_train_loss(hp_sentence, viz):
 
     Saves plots in the plots folder.
     """
+    json.dump(viz, open("plots/viz_data.json", "w"))
+
     if 'val_loss_list' in viz.keys():
         fig = plt.figure()
         x = np.arange(len(viz['train_loss_list']))

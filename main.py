@@ -296,7 +296,6 @@ def train(data, fixed_params, data_paths,
                 all_eids_dict[('user', 'buys', 'item')],
                 fixed_params.k,
                 True,  # Remove already bought
-                cuda,
                 device,
                 fixed_params.pred,
                 params['use_popularity'],

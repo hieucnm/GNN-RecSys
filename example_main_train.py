@@ -1,14 +1,10 @@
-import math
-import datetime
-
 import click
 import numpy as np
 import torch
-from dgl.data.utils import save_graphs
 from dgl import heterograph
 
 from src.utils_data import DataLoader, assign_graph_features, print_data_loaders, calculate_num_batches
-from src.utils import read_data, save_txt, save_outputs
+from src.utils import read_data, save_txt, save_everything
 from src.model import ConvModel, max_margin_loss
 from src.sampling import train_valid_split, generate_dataloaders
 from src.train.run import train_model, get_embeddings
@@ -164,7 +160,7 @@ def train_full_model(fixed_params_path,
     hp_sentence.update(vars(fixed_params))
     hp_sentence = f'{str(hp_sentence)[1: -1]} \n'
     save_txt(f'\n \n START - Hyperparameters \n{hp_sentence}', train_data_paths.result_filepath, "a")
-    trained_model, viz, best_metrics = train_model(
+    model, viz, best_metrics = train_model(
         model,
         num_epochs=fixed_params.num_epochs,
         num_batches_train=num_batches_train,
@@ -198,6 +194,46 @@ def train_full_model(fixed_params_path,
         pred=params['pred'],
         remove_false_negative=fixed_params.remove_false_negative
     )
+
+    # Save everything
+    save_everything(model, valid_graph, data, params, fixed_params)
+
+    # Get viz & metrics
+    if visualization:
+        plot_train_loss(hp_sentence, viz)
+
+    # Report performance on validation set
+    sentence = ("BEST VALIDATION Precision "
+                "{:.3f}% | Recall {:.3f}% | Coverage {:.2f}%"
+                .format(best_metrics['precision'] * 100,
+                        best_metrics['recall'] * 100,
+                        best_metrics['coverage'] * 100))
+    log.info(sentence)
+    save_txt(sentence, train_data_paths.result_filepath, mode='a')
+
+    # Report performance on test set
+    log.debug('Test metrics start ...')
+    model.eval()
+    with torch.no_grad():
+        embeddings = get_embeddings(valid_graph, params['out_dim'], model, nodeloader_test, num_batches_test, device)
+
+        for ground_truth in [data.ground_truth_purchase_test, data.ground_truth_test]:
+            precision, recall, coverage = get_metrics_at_k(embeddings,
+                                                           valid_graph,
+                                                           model,
+                                                           params['out_dim'],
+                                                           ground_truth,
+                                                           all_eids_dict[('user', 'converts', 'item')],
+                                                           fixed_params.k,
+                                                           False,  # Remove already bought
+                                                           device,
+                                                           params['pred'])
+            sentence = ("TEST Precision {:.3f}% | Recall {:.3f}% | Coverage {:.2f}%"
+                        .format(precision * 100,
+                                recall * 100,
+                                coverage * 100))
+            log.info(sentence)
+            save_txt(sentence, train_data_paths.result_filepath, mode='a')
 
 
 @click.command()

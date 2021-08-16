@@ -146,9 +146,7 @@ def inference_ondemand(user_ids,  # List or 'all'
                                     trained_model,
                                     nodeloader_test,
                                     num_batches_test,
-                                    cuda,
                                     device,
-                                    params['embedding_layer'],
                                     )
         recs = get_recs(graph,
                         embeddings,
@@ -158,7 +156,6 @@ def inference_ondemand(user_ids,  # List or 'all'
                         test_uids,
                         already_bought_dict,
                         remove_already_bought=True,
-                        cuda=cuda,
                         device=device,
                         pred=params['pred'],
                         use_popularity=params['use_popularity'],

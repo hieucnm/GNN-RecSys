@@ -274,7 +274,6 @@ def train_full_model(fixed_params_path,
                                     num_batches_test,
                                     cuda,
                                     device,
-                                    params['embedding_layer'],
                                     )
 
         for ground_truth in [data.ground_truth_purchase_test, data.ground_truth_test]:
@@ -287,7 +286,6 @@ def train_full_model(fixed_params_path,
                 all_eids_dict[('user', 'buys', 'item')],
                 fixed_params.k,
                 True,  # Remove already bought
-                cuda,
                 device,
                 params['pred'],
                 params['use_popularity'],

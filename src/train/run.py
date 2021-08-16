@@ -222,7 +222,6 @@ def train_model(model,
                                    model,
                                    nodeloader_subtrain,
                                    num_batches_subtrain,
-                                   cuda,
                                    device
                                    )
 
@@ -233,8 +232,7 @@ def train_model(model,
                                                                                  ground_truth_subtrain,
                                                                                  bought_eids,
                                                                                  k,
-                                                                                 False,  # Remove already bought
-                                                                                 cuda,
+                                                                                 True,  # Remove already bought
                                                                                  device,
                                                                                  pred,
                                                                                  use_popularity,
@@ -247,7 +245,6 @@ def train_model(model,
                                    model,
                                    nodeloader_valid,
                                    num_batches_val_metrics,
-                                   cuda,
                                    device,
                                    )
 
@@ -259,7 +256,6 @@ def train_model(model,
                                                                            bought_eids,
                                                                            k,
                                                                            remove_already_bought,
-                                                                           cuda,
                                                                            device,
                                                                            pred,
                                                                            use_popularity,
@@ -321,7 +317,6 @@ def get_embeddings(g,
                    trained_model,
                    nodeloader_test,
                    num_batches_valid: int,
-                   cuda: bool = False,
                    device=None):
     """
     Fetch the embeddings for all the nodes in the nodeloader.
@@ -330,14 +325,17 @@ def get_embeddings(g,
     and only have relevant nodes in the computational blocks. Whereas Edgeloader is preferable for training, because
     we generate negative edges also.
     """
-    if cuda:  # model is already on device?
-        trained_model = trained_model.to(device)
-    i2 = 0
+    cuda = device is not None and device.type != 'cpu'
     y = {ntype: torch.zeros(g.num_nodes(ntype), out_dim)
          for ntype in g.ntypes}
-    if cuda:  # not sure if I need to put the 'result' tensor to device
+
+    # not sure if I need to put the 'result' tensor to device
+    if cuda:
+        trained_model = trained_model.to(device)
         y = {ntype: torch.zeros(g.num_nodes(ntype), out_dim).to(device)
              for ntype in g.ntypes}
+
+    i2 = 0
     for input_nodes, output_nodes, blocks in nodeloader_test:
         i2 += 1
         if i2 % 10 == 0:
