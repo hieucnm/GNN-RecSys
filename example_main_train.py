@@ -17,6 +17,7 @@ from src.metrics import (create_already_bought, create_ground_truth,
                          get_metrics_at_k, get_recs)
 from src.evaluation import explore_recs, explore_sports, check_coverage
 from presplit import presplit_data
+from src.utils_data import FixedParameters
 
 from logging_config import get_logger
 
@@ -41,18 +42,14 @@ def train_full_model(fixed_params_path,
                      edge_batch_size,
                      **params,):
 
-    class objectview(object):
-        def __init__(self, d):
-            self.__dict__ = d
-
-    # fixed_params = objectview(read_data(fixed_params_path))
-    fixed_params = objectview({})
-    fixed_params.uid_column = 'user_id'
-    fixed_params.iid_column = 'item_id'
-    fixed_params.date_column = 'date'
-    fixed_params.conv_column = 'converted'
-    fixed_params.duplicates = 'count_occurrence'
-    fixed_params.discern_clicks = True
+    fixed_params = FixedParameters(
+        num_epochs=params['num_epochs'],
+        start_epoch=params['start_epoch'],
+        patience=params['patience'],
+        remove=remove,
+        edge_batch_size=edge_batch_size,
+        duplicates='count_occurrence'
+    )
 
     # Create full train set
     train_data_paths = TrainDataPaths()
@@ -81,7 +78,7 @@ def train_full_model(fixed_params_path,
 
     dim_dict = {'user': valid_graph.nodes['user'].data['features'].shape[1],
                 'item': params['hidden_dim'],
-                'out': params['out_dim'],
+                'out':  fixed_params.out_dim,
                 'hidden': params['hidden_dim']}
 
     model = ConvModel(valid_graph,
@@ -89,16 +86,38 @@ def train_full_model(fixed_params_path,
                       dim_dict,
                       params['norm'],
                       params['dropout'],
-                      params['aggregator_type'],
-                      params['pred'],
-                      params['aggregator_hetero']
+                      fixed_params.aggregator_type,
+                      fixed_params.pred,
+                      fixed_params.aggregator_hetero
                       )
     if cuda:
         model = model.to(device)
-    print(model.eval())
 
-
-
+    # Initialize data_loaders
+    # get training and test ids
+    (
+        train_graph,
+        train_eids_dict,
+        valid_eids_dict,
+        subtrain_uids,
+        valid_uids,
+        test_uids,
+        all_iids,
+        ground_truth_subtrain,
+        ground_truth_valid,
+        all_eids_dict
+    ) = train_valid_split(
+        valid_graph,
+        data.ground_truth_test,
+        fixed_params.etype,
+        fixed_params.subtrain_size,
+        fixed_params.valid_size,
+        fixed_params.reverse_etype,
+        fixed_params.train_on_clicks,
+        fixed_params.remove_train_eids,
+        params['clicks_sample'],
+        params['converts_sample'],
+    )
 
 
 @click.command()
@@ -118,13 +137,14 @@ def main(fixed_params_path, params_path, visualization, check_embedding, remove,
     params = {
         'use_recency': True,
         'hidden_dim': 64,
-        'out_dim': 1,
         'n_layers': 3,
         'dropout': 0.1,
-        'aggregator_type': 'mean',
-        'pred': 'cos',
-        'aggregator_hetero': 'mean',
-        'norm': True
+        'norm': True,
+        'num_epochs': 2,
+        'start_epoch': 0,
+        'patience': 1,
+        'clicks_sample': 1.,
+        'converts_sample': 1.,
     }
 
     train_full_model(fixed_params_path=fixed_params_path,

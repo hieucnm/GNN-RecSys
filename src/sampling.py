@@ -11,7 +11,7 @@ def train_valid_split(valid_graph: dgl.DGLHeteroGraph,
                       train_on_clicks,
                       remove_train_eids,
                       clicks_sample=1,
-                      purchases_sample=1,
+                      converts_sample=1,
                       ):
     """
     Using the full graph, sample train_graph and eids of edges for train & validation, as well as nids for test.
@@ -55,7 +55,7 @@ def train_valid_split(valid_graph: dgl.DGLHeteroGraph,
         valid_uids_all.extend(valid_uids.tolist())
         valid_iids_all.extend(valid_iids.tolist())
         all_eids_dict[etype] = all_eids
-        if (etype == ('user', 'buys', 'item')) or (etype == ('user', 'clicks', 'item') and train_on_clicks):
+        if (etype == ('user', 'converts', 'item')) or (etype == ('user', 'clicks', 'item') and train_on_clicks):
             valid_eids_dict[etype] = valid_eids
     ground_truth_valid = (np.array(valid_uids_all), np.array(valid_iids_all))
     valid_uids = np.array(np.unique(valid_uids_all))
@@ -63,17 +63,17 @@ def train_valid_split(valid_graph: dgl.DGLHeteroGraph,
     # Create partial graph
     train_graph = valid_graph.clone()
     for etype in etypes:
-        if (etype == ('user', 'buys', 'item')) or (etype == ('user', 'clicks', 'item') and train_on_clicks):
+        if (etype == ('user', 'converts', 'item')) or (etype == ('user', 'clicks', 'item') and train_on_clicks):
             train_graph.remove_edges(valid_eids_dict[etype], etype=etype)
             train_graph.remove_edges(valid_eids_dict[etype], etype=reverse_etype[etype])
             train_eids = np.arange(train_graph.number_of_edges(etype))
             train_eids_dict[etype] = train_eids
 
-    if purchases_sample != 1:
-        eids = train_eids_dict[('user', 'buys', 'item')]
-        train_eids_dict[('user', 'buys', 'item')] = eids[int(len(eids) * (1 - purchases_sample)):]
-        eids = valid_eids_dict[('user', 'buys', 'item')]
-        valid_eids_dict[('user', 'buys', 'item')] = eids[int(len(eids) * (1 - purchases_sample)):]
+    if converts_sample != 1:
+        eids = train_eids_dict[('user', 'converts', 'item')]
+        train_eids_dict[('user', 'converts', 'item')] = eids[int(len(eids) * (1 - converts_sample)):]
+        eids = valid_eids_dict[('user', 'converts', 'item')]
+        valid_eids_dict[('user', 'converts', 'item')] = eids[int(len(eids) * (1 - converts_sample)):]
 
     if clicks_sample != 1 and ('user', 'clicks', 'item') in train_eids_dict.keys():
         eids = train_eids_dict[('user', 'clicks', 'item')]
@@ -86,11 +86,11 @@ def train_valid_split(valid_graph: dgl.DGLHeteroGraph,
         train_graph.remove_edges(train_eids_dict[etype], etype=reverse_etype[etype])
 
     # Generate inference nodes for subtrain & ground truth for subtrain
-    ## Choose the subsample of training set. For now, only users with purchases are included.
+    # Step 1: Choose the subsample of training set. For now, only users with purchases are included.
     train_uids, train_iids = valid_graph.find_edges(train_eids_dict[etypes[0]], etype=etypes[0])
     unique_train_uids = np.unique(train_uids)
     subtrain_uids = np.random.choice(unique_train_uids, int(len(unique_train_uids) * subtrain_size), replace=False)
-    ## Fetch uids and iids of subtrain sample for all etypes
+    # Step 2: Fetch uids and iids of subtrain sample for all etypes
     subtrain_uids_all = []
     subtrain_iids_all = []
     for etype in train_eids_dict.keys():

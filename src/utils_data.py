@@ -20,16 +20,17 @@ class DataPaths:
         self.user_feat_path = 'FEATURE DATASET, USERS.csv'
         self.sport_onehot_path = 'FEATURE DATASET, SPORTS (one-hot vectors) .csv'
 
+
+# noinspection PyUnresolvedReferences
 class FixedParameters:
-    def __init__(self, num_epochs, start_epoch, patience, edge_batch_size,
-                 remove, item_id_type, duplicates):
+    def __init__(self, num_epochs, start_epoch, patience, remove, edge_batch_size, duplicates):
         """
         All parameters that are fixed, i.e. not part of the hyperparametrization.
 
         Attributes
         ----------
-        ctm_id_type :
-            Identifier for the customers.
+        uid_column :
+            Identifier for the users.
         Days_of_purchases (Days_of_clicks) :
             Number of days of purchases (clicks) that should be kept in the dataset.
             Intuition is that interactions of 12+ months ago might not be relevant. Max is 710 days
@@ -44,12 +45,8 @@ class FixedParameters:
             will drop all duplicates except last. 'keep_all' will conserve all duplicates.
         Explore :
             Print examples of recommendations and of similar sports
-        Include_sport :
-            Sports will be included in the graph, with 6 more relation types. User-practices-sport,
-            item-utilizedby-sport, sport-belongsto-sport (and all their reverse relation type)
-        item_id_type :
-            Identifier for the items. Can be SPECIFIC ITEM IDENTIFIER (e.g. item SKU) or GENERIC ITEM IDENTIFIER
-            (e.g. item family ID)
+        uid_column, iid_column :
+            Identifier for the users & items.
         Lifespan_of_items :
             Number of days since most recent transactions for an item to be considered by the
             model. Max is 710 days. Won't make a difference is it is > Days_of_interaction.
@@ -66,49 +63,55 @@ class FixedParameters:
             When parametrizing the GNN, edges of purchases are always included. If true, clicks will also
             be included
         """
-        self.ctm_id_type = 'CUSTOMER IDENTIFIER'
-        self.days_of_purchases = 365  # Max is 710
+
+        self.days_of_converts = 365  # Max is 710
         self.days_of_clicks = 30  # Max is 710
+        self.lifespan_of_items = 180
+        self.etype = [('user', 'converts', 'item')]
+        self.reverse_etype = {('user', 'converts', 'item'): ('item', 'converted-by', 'user')}
         self.discern_clicks = True
-        self.duplicates = duplicates  # 'keep_last', 'keep_all', 'count_occurrence'
-        self.edge_batch_size = edge_batch_size
-        self.etype = [('user', 'buys', 'item')]
         if self.discern_clicks:
             self.etype.append(('user', 'clicks', 'item'))
-        self.explore = True
-        self.include_sport = True
-        self.item_id_type = item_id_type
+            self.reverse_etype[('user', 'clicks', 'item')] = ('item', 'clicked-by', 'user')
+
+        self.uid_column = 'user_id'
+        self.iid_column = 'item_id'
+        self.pred = 'cos'  # cosine similarity
         self.k = 10
-        self.lifespan_of_items = 180
-        self.neighbor_sampler = 'full'
-        self.node_batch_size = 128
         self.num_choices = 10
-        self.num_epochs = num_epochs
-        self.optimizer = torch.optim.Adam
-        self.patience = patience
-        self.pred = 'cos'
-        self.remove = remove
+        self.neighbor_sampler = 'full'
+        self.explore = True
         self.remove_false_negative = True
-        self.remove_on_inference = .7
         self.remove_train_eids = False
         self.report_model_coverage = False
-        self.reverse_etype = {('user', 'buys', 'item'): ('item', 'bought-by', 'user')}
-        if self.discern_clicks:
-            self.reverse_etype[('user', 'clicks', 'item')] = ('item', 'clicked-by', 'user')
-        self.run_inference = 1
-        self.spt_id_type = 'sport_id'
-        self.start_epoch = start_epoch
-        self.subtrain_size = 0.05
         self.train_on_clicks = True
+        self.remove_on_inference = .7
+        self.run_inference = 1
+        self.subtrain_size = 0.05
         self.valid_size = 0.05
+        self.node_batch_size = 128
+        self.optimizer = torch.optim.Adam
+
+        self.duplicates = duplicates  # 'keep_last', 'keep_all', 'count_occurrence'
+        self.num_epochs = num_epochs
+        self.start_epoch = start_epoch
+        self.patience = patience
+        self.edge_batch_size = edge_batch_size
+        self.remove = remove
+
+        # added by HieuCNM
+        self.date_column = 'date'
+        self.conv_column = 'converted'
+        self.out_dim = 1
+
         # self.dropout = .5  # HP
         # self.norm = False  # HP
         # self.use_popularity = False  # HP
         # self.days_popularity = 0  # HP
         # self.weight_popularity = 0.  # HP
         # self.use_recency = False  # HP
-        # self.aggregator_type = 'mean_nn_edge'  # HP
-        # self.aggregator_hetero = 'sum'  # HP
+        self.aggregator_type = 'mean'  # HP, search `aggregator_type` in this project
+        self.aggregator_hetero = 'mean'  # HP
         # self.purchases_sample = .5  # HP
         # self.clicks_sample = .4  # HP
         # self.embedding_layer = False  # HP

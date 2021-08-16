@@ -358,10 +358,10 @@ def train(data, fixed_params, data_paths,
                          data.item_feat_df,
                          fixed_params.num_choices,
                          data.item_id_df,
-                         fixed_params.item_id_type,
+                         fixed_params.iid_column,
                          data_paths.result_filepath)
 
-            if fixed_params.item_id_type == 'SPECIFIC ITEM_IDENTIFIER':
+            if fixed_params.iid_column == 'SPECIFIC ITEM_IDENTIFIER':
                 coverage_metrics = check_coverage(data.user_item_train,
                                                   data.item_feat_df,
                                                   data.item_id_df,
@@ -401,8 +401,8 @@ def train(data, fixed_params, data_paths,
 
         del params['remove']
         # Save model if the recall is greater than 8%
-        if (recall > 0.08) & (fixed_params.item_id_type == 'SPECIFIC ITEM_IDENTIFIER') \
-                or (recall > 0.2) & (fixed_params.item_id_type == 'GENERAL ITEM_IDENTIFIER'):
+        if (recall > 0.08) & (fixed_params.iid_column == 'SPECIFIC ITEM_IDENTIFIER') \
+                or (recall > 0.2) & (fixed_params.iid_column == 'GENERAL ITEM_IDENTIFIER'):
             date = str(datetime.datetime.now())[:-10].replace(' ', '')
             torch.save(trained_model.state_dict(), f'models/HP_Recall_{recall * 100:.2f}_{date}.pth')
             # Save all necessary params
