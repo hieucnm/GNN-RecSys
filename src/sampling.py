@@ -119,6 +119,7 @@ def train_valid_split(valid_graph: dgl.DGLHeteroGraph,
            all_iids, ground_truth_subtrain, ground_truth_valid, all_eids_dict
 
 
+# noinspection PyTypeChecker
 def generate_dataloaders(valid_graph,
                          train_graph,
                          train_eids_dict,
@@ -129,8 +130,6 @@ def generate_dataloaders(valid_graph,
                          all_iids,
                          fixed_params,
                          num_workers,
-                         all_sids=None,
-                         embedding_layer: bool = True,
                          **params,
                          ):
     """
@@ -155,9 +154,8 @@ def generate_dataloaders(valid_graph,
               a NodeDataLoader instead of an EdgeDataLoader.
             - We have a nodeloader for subtrain, validation and test.
     """
-    n_layers = params['n_layers']
-    if embedding_layer:
-        n_layers = n_layers - 1
+    n_layers = params['n_layers'] - 1  # except the embedding layer
+
     if fixed_params.neighbor_sampler == 'full':
         sampler = dgl.dataloading.MultiLayerFullNeighborSampler(n_layers)
     elif fixed_params.neighbor_sampler == 'partial':
@@ -188,8 +186,12 @@ def generate_dataloaders(valid_graph,
             train_eids_dict,
             sampler,
             exclude='reverse_types',
-            reverse_etypes={'buys': 'bought-by', 'bought-by': 'buys',
-                            'clicks': 'clicked-by', 'clicked-by': 'clicks'},
+            reverse_etypes={
+                'converts': 'converted-by',
+                'converted-by': 'converts',
+                'clicks': 'clicked-by',
+                'clicked-by': 'clicks'
+            },
             negative_sampler=sampler_n,
             batch_size=fixed_params.edge_batch_size,
             shuffle=True,
@@ -232,8 +234,6 @@ def generate_dataloaders(valid_graph,
     )
 
     test_node_ids = {'user': test_uids, 'item': all_iids}
-    if 'sport' in valid_graph.ntypes:
-        test_node_ids['sport'] = all_sids
 
     nodeloader_test = dgl.dataloading.NodeDataLoader(
         valid_graph,

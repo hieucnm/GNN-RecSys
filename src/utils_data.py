@@ -23,7 +23,7 @@ class DataPaths:
 
 # noinspection PyUnresolvedReferences
 class FixedParameters:
-    def __init__(self, num_epochs, start_epoch, patience, remove, edge_batch_size, duplicates):
+    def __init__(self, num_epochs, start_epoch, patience, edge_batch_size, duplicates):
         """
         All parameters that are fixed, i.e. not part of the hyperparametrization.
 
@@ -97,7 +97,6 @@ class FixedParameters:
         self.start_epoch = start_epoch
         self.patience = patience
         self.edge_batch_size = edge_batch_size
-        self.remove = remove
 
         # added by HieuCNM
         self.date_column = 'date'
@@ -131,7 +130,7 @@ class DataLoader:
         self.user_item_test = read_data(data_paths.test_path)
 
         self.user_item_test = filter_unseen_item(self.user_item_train, self.user_item_test, fixed_params.iid_column)
-        report_user_coverage(self.user_item_train, self.user_item_test, fixed_params.uid_column)
+        # report_user_coverage(self.user_item_train, self.user_item_test, fixed_params.uid_column)
 
         self.user_id_df = create_ids(self.user_item_train, fixed_params.uid_column)
         self.item_id_df = create_ids(self.user_item_train, fixed_params.iid_column)
