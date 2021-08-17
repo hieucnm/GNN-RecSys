@@ -206,8 +206,10 @@ def import_features(user_feat_df,
     features_dict = {}
 
     # User features
-    uid_set = set(uid_df[uid_column])
-    user_feat_df = user_feat_df[user_feat_df[uid_column].isin(uid_set)].reset_index(drop=True)
+    user_feat_df = user_feat_df.merge(uid_df, on=uid_column, how='inner')
+    assert user_feat_df.shape[0] == uid_df.shape[0], \
+        "no. users in user_feat ({}) not equal no. users in interactions ({})".format(user_feat_df.shape[0],
+                                                                                      uid_df.shape[0])
     user_feat_df = user_feat_df.iloc[:, 1:]  # the first column should be user_id
     features_dict['user'] = torch.tensor(user_feat_df.values).float()
 
