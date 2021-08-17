@@ -10,17 +10,27 @@ import dgl.function as fn
 class NodeEmbedding(nn.Module):
     """
     Projects the node features into embedding space.
+    If use_id = True, the ids of nodes will be use to get embeddings.
+    Otherwise, the node features will be projected to the embedding space,
+        and a batch_norm layer also be used to normalize the features
     """
     def __init__(self,
                  in_feats,
                  out_feats,
+                 use_id
                  ):
         super().__init__()
-        self.proj_feats = nn.Linear(in_feats, out_feats)
+        self.use_id = use_id
+        if use_id:
+            self.embedding = nn.Embedding(in_feats, out_feats)
+        else:
+            self.bn = nn.BatchNorm1d(in_feats)
+            self.embedding = nn.Linear(in_feats, out_feats)
 
-    def forward(self,
-                node_feats):
-        x = self.proj_feats(node_feats)
+    def forward(self, node_feats):
+        if not self.use_id:
+            node_feats = self.bn(node_feats)
+        x = self.embedding(node_feats)
         return x
 
 
@@ -370,9 +380,8 @@ class ConvModel(nn.Module):
         super().__init__()
 
         # input layer
-        self.user_embed = NodeEmbedding(dim_dict['user'], dim_dict['hidden'])
-        # self.item_embed = NodeEmbedding(dim_dict['item'], dim_dict['hidden'])
-        self.item_embed = nn.Embedding(dim_dict['n_item'], dim_dict['hidden'])
+        self.user_embed = NodeEmbedding(dim_dict['user'], dim_dict['hidden'], use_id=False)
+        self.item_embed = NodeEmbedding(dim_dict['item'], dim_dict['hidden'], use_id=True)
 
         self.layers = nn.ModuleList()
         # hidden layers

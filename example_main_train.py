@@ -136,8 +136,7 @@ def train_full_model(fixed_params_path,
 
     # Init model
     dim_dict = {'user': valid_graph.nodes['user'].data['features'].shape[1],
-                # 'item': params['hidden_dim'],
-                'n_item': data.item_id_df.shape[0],
+                'item': data.item_id_df.shape[0],
                 'out': params['out_dim'],
                 'hidden': params['hidden_dim']}
 
