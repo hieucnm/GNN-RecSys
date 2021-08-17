@@ -92,9 +92,8 @@ def train_model(model,
         start_time = time.time()
         print('TRAINING LOSS')
         model.train()  # Because if not, after eval, dropout would be still be inactive
-        i = 0
         total_loss = 0
-        for _, pos_g, neg_g, blocks in edgeloader_train:
+        for i, (_, pos_g, neg_g, blocks) in enumerate(edgeloader_train):
             # print out what inside a batch, remember to break
             # print_one_batch((_, pos_g, neg_g, blocks))
             # break
@@ -118,8 +117,7 @@ def train_model(model,
                 pos_g = pos_g.to(device)
                 neg_g = neg_g.to(device)
 
-            i += 1
-            if i % 10 == 0:
+            if (i + 1) % 10 == 0:
                 print("Edge batch {}/{}".format(i, num_batches_train))
             input_features = blocks[0].srcdata['features']
             # recency (TO BE CLEANED)
@@ -159,10 +157,8 @@ def train_model(model,
         model.eval()
         with torch.no_grad():
             total_loss = 0
-            i = 0
-            for _, pos_g, neg_g, blocks in edgeloader_valid:
-                i += 1
-                if i % 10 == 0:
+            for i, (_, pos_g, neg_g, blocks) in enumerate(edgeloader_valid):
+                if (i + 1) % 10 == 0:
                     print("Edge batch {}/{}".format(i, num_batches_val_loss))
 
                 # Negative mask

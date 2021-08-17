@@ -194,12 +194,12 @@ def train_full_model(fixed_params_path,
         remove_false_negative=fixed_params.remove_false_negative
     )
 
-    # Save everything
-    save_everything(model, valid_graph, data, params, fixed_params)
-
-    # Get viz & metrics
-    if visualization:
-        plot_train_loss(hp_sentence, viz)
+    # # Save everything
+    # save_everything(model, valid_graph, data, params, fixed_params)
+    #
+    # # Get viz & metrics
+    # if visualization:
+    #     plot_train_loss(hp_sentence, viz)
 
     # Report performance on validation set
     sentence = ("BEST VALIDATION Precision "
