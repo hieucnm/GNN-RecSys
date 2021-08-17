@@ -206,10 +206,10 @@ def import_features(user_feat_df,
     features_dict = {}
 
     # User features
-    train_uid = set(uid_df[uid_column])
-    user_feat = user_feat_df[user_feat_df[uid_column].isin(train_uid)].reset_index(drop=True)
-    user_feat = user_feat.iloc[:, 1:]  # the first column should be user_id
-    features_dict['user'] = torch.tensor(user_feat.values).float()
+    uid_set = set(uid_df[uid_column])
+    user_feat_df = user_feat_df[user_feat_df[uid_column].isin(uid_set)].reset_index(drop=True)
+    user_feat_df = user_feat_df.iloc[:, 1:]  # the first column should be user_id
+    features_dict['user'] = torch.tensor(user_feat_df.values).float()
 
     # Item features: no features, just item_id to get embedding
     features_dict['item'] = torch.LongTensor(iid_df[f'{iid_column}_new'].values)
