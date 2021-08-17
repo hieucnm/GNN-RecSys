@@ -171,7 +171,7 @@ def inference_fn(trained_model,
                                     device,
                                     )
 
-        for ground_truth in [data.ground_truth_purchase_test, data.ground_truth_test]:
+        for ground_truth in [data.ground_truth_convert_test, data.ground_truth_test]:
             precision, recall, coverage = get_metrics_at_k(
                 embeddings,
                 valid_graph,

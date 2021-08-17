@@ -171,7 +171,6 @@ def train_full_model(fixed_params_path,
         delta=params['delta'],
         neg_sample_size=params['neg_sample_size'],
         use_recency=params['use_recency'],
-        cuda=cuda,
         device=device,
         optimizer=fixed_params.optimizer,
         lr=params['lr'],
@@ -217,7 +216,7 @@ def train_full_model(fixed_params_path,
     with torch.no_grad():
         embeddings = get_embeddings(valid_graph, params['out_dim'], model, nodeloader_test, num_batches_test, device)
 
-        for ground_truth in [data.ground_truth_purchase_test, data.ground_truth_test]:
+        for ground_truth in [data.ground_truth_convert_test, data.ground_truth_test]:
             precision, recall, coverage = get_metrics_at_k(embeddings,
                                                            valid_graph,
                                                            model,
@@ -255,7 +254,7 @@ def main(fixed_params_path, params_path, visualization, check_embedding, edge_ba
         'n_layers': 3,
         'dropout': 0.1,
         'norm': True,
-        'num_epochs': 3,
+        'num_epochs': 2,
         'start_epoch': 0,
         'patience': 1,
         'clicks_sample': 1.,

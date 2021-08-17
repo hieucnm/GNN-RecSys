@@ -276,7 +276,7 @@ def train_full_model(fixed_params_path,
                                     device,
                                     )
 
-        for ground_truth in [data.ground_truth_purchase_test, data.ground_truth_test]:
+        for ground_truth in [data.ground_truth_convert_test, data.ground_truth_test]:
             precision, recall, coverage = get_metrics_at_k(
                 embeddings,
                 valid_graph,
@@ -337,7 +337,7 @@ def train_full_model(fixed_params_path,
                             use_popularity=params['use_popularity'],
                             weight_popularity=params['weight_popularity'])
 
-            users, items = data.ground_truth_purchase_test
+            users, items = data.ground_truth_convert_test
             ground_truth_purchase_dict = create_ground_truth(users, items)
             explore_recs(recs,
                          already_bought_dict,

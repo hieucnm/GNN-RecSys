@@ -138,7 +138,7 @@ class DataLoader:
         (
             self.adjacency_dict,
             self.ground_truth_test,
-            self.ground_truth_purchase_test,
+            self.ground_truth_convert_test,
             self.user_item_train_grouped
         ) = df_to_adjacency_list(
             user_item_train=self.user_item_train,

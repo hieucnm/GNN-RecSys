@@ -28,7 +28,6 @@ def train_model(model,
                 delta,
                 neg_sample_size,
                 use_recency=False,
-                cuda=False,
                 device=None,
                 optimizer=torch.optim.Adam,
                 lr=0.001,
@@ -71,6 +70,7 @@ def train_model(model,
             - Everything is logged, best metrics are saved.
             - Using the patience parameter, early stopping is applied when val_loss stops going down.
     """
+    cuda = device is not None and device.type != 'cpu'
     model.train_loss_list = []
     model.train_precision_list = []
     model.train_recall_list = []
@@ -234,9 +234,7 @@ def train_model(model,
                                                                                  k,
                                                                                  True,  # Remove already bought
                                                                                  device,
-                                                                                 pred,
-                                                                                 use_popularity,
-                                                                                 weight_popularity)
+                                                                                 pred)
 
                 # validation metrics
                 print('VALIDATION METRICS')
@@ -257,10 +255,7 @@ def train_model(model,
                                                                            k,
                                                                            remove_already_bought,
                                                                            device,
-                                                                           pred,
-                                                                           use_popularity,
-                                                                           weight_popularity
-                                                                           )
+                                                                           pred)
                 sentence = '''Epoch {:05d} || TRAINING Loss {:.5f} | Precision {:.3f}% | Recall {:.3f}% | Coverage {:.2f}% 
                 || VALIDATION Loss {:.5f} | Precision {:.3f}% | Recall {:.3f}% | Coverage {:.2f}% '''.format(
                     epoch, train_avg_loss, train_precision * 100, train_recall * 100, train_coverage * 100,
