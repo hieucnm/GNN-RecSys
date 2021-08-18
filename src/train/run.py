@@ -48,6 +48,7 @@ def train_model(model,
                 patience=5,
                 pred=None,
                 remove_false_negative=False,
+                proc_id=0
                 ):
     """
     Main function to train a GNN, using max margin loss on positive and negative examples.
@@ -151,6 +152,8 @@ def train_model(model,
         train_avg_loss = total_loss / (i + 1)
         model.train_loss_list.append(train_avg_loss)
 
+        if proc_id > 0:
+            continue
         print('VALIDATION LOSS')
         model.eval()
         with torch.no_grad():
