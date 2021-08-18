@@ -183,8 +183,6 @@ def main(args):
         nodeloader_subtrain=node_loader_sub_train,
         num_batches_train=num_batches_train,
         num_batches_val_loss=num_batches_val_loss,
-        num_batches_subtrain=num_batches_sub_train,
-        num_batches_val_metrics=num_batches_val_metrics,
         ground_truth_subtrain=ground_truth_sub_train,
         ground_truth_valid=ground_truth_valid,
         bought_eids=train_eid_dict[('user', 'converts', 'item')],
