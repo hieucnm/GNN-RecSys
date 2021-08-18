@@ -85,12 +85,11 @@ def train_model(model,
     opt = optimizer(model.parameters(), lr=lr)
 
     # TRAINING
-    print('Starting training.')
     for epoch in range(start_epoch, num_epochs):
         start_time = time.time()
-        print('TRAINING LOSS')
         model.train()  # Because if not, after eval, dropout would be still be inactive
         total_loss = 0
+        print(f'--> Epoch {epoch}/{num_epochs} : Training ...')
         for i, (_, pos_g, neg_g, blocks) in enumerate(edgeloader_train):
             # print out what inside a batch, remember to break
             # print_one_batch((_, pos_g, neg_g, blocks))
@@ -138,8 +137,8 @@ def train_model(model,
                            device=device,
                            )
             if (i + 1) % 10 == 0:
-                print("Edge batch {}/{}: loss = {:.5f}".format(
-                    i+1, num_batches_train, loss.item() / len(blocks)))
+                print("Epoch {}/{} - Batch {}/{}: loss = {:.5f}".format(
+                    epoch, num_epochs, i + 1, num_batches_train, loss.item() / len(blocks)))
 
             if epoch > 0:  # For the epoch 0, no training (just report loss)
                 loss.backward()
@@ -154,7 +153,7 @@ def train_model(model,
 
         if proc_id > 0:
             continue
-        print('VALIDATION LOSS')
+        print(f'--> Epoch {epoch}/{num_epochs} : validating ...')
         model.eval()
         with torch.no_grad():
             total_loss = 0
@@ -202,8 +201,8 @@ def train_model(model,
                                    )
                 total_loss += val_loss.item()
                 if (i + 1) % 10 == 0:
-                    print("Edge batch {}/{}: loss = {:.5f}".format(
-                        i + 1, num_batches_val_loss, val_loss.item() / len(blocks)))
+                    print("Epoch {}/{} - Batch {}/{}: loss = {:.5f}".format(
+                        epoch, num_epochs, i + 1, num_batches_val_loss, val_loss.item() / len(blocks)))
             val_avg_loss = total_loss / (i + 1)
             model.val_loss_list.append(val_avg_loss)
 
@@ -212,7 +211,7 @@ def train_model(model,
         if get_metrics and epoch > 0:
             model.eval()
             with torch.no_grad():
-                print('TRAINING METRICS')
+                print(f'--> Epoch {epoch}/{num_epochs} : calculating training metrics ...')
                 y = get_embeddings(train_graph,
                                    out_dim,
                                    model,
@@ -232,7 +231,7 @@ def train_model(model,
                                                                                  pred)
 
                 # validation metrics
-                print('VALIDATION METRICS')
+                print(f'--> Epoch {epoch}/{num_epochs} : calculating validation metrics ...')
                 y = get_embeddings(valid_graph,
                                    out_dim,
                                    model,
@@ -250,9 +249,11 @@ def train_model(model,
                                                                            remove_already_bought,
                                                                            device,
                                                                            pred)
-                sentence = '''Epoch {:02d} || TRAINING Loss {:.5f} | Precision {:.3f}% | Recall {:.3f}% | Coverage {:.2f}% 
-                || VALIDATION Loss {:.5f} | Precision {:.3f}% | Recall {:.3f}% | Coverage {:.2f}% '''.format(
-                    epoch, train_avg_loss, train_precision * 100, train_recall * 100, train_coverage * 100,
+                sentence = '''--> Finish epoch {:02d}/{:02d} 
+                || Training Loss {:.5f} | Precision {:.3f}% | Recall {:.3f}% | Coverage {:.2f}% 
+                || Validation Loss {:.5f} | Precision {:.3f}% | Recall {:.3f}% | Coverage {:.2f}% '''.format(
+                    epoch, num_epochs,
+                    train_avg_loss, train_precision * 100, train_recall * 100, train_coverage * 100,
                     val_avg_loss, val_precision * 100, val_recall * 100, val_coverage * 100)
                 print(sentence)
                 save_txt(sentence, result_filepath, mode='a')
@@ -270,8 +271,8 @@ def train_model(model,
                     best_metrics = {'recall': val_recall, 'precision': val_precision, 'coverage': val_coverage}
 
         else:
-            sentence = "Epoch {:02d} | Training Loss {:.5f} | Validation Loss {:.5f} | ".format(
-                epoch, train_avg_loss, val_avg_loss)
+            sentence = "--> Finish epoch {:02d}/{:02d} | Training Loss {:.5f} | Validation Loss {:.5f} | ".format(
+                epoch, num_epochs, train_avg_loss, val_avg_loss)
             print(sentence)
             save_txt(sentence, result_filepath, mode='a')
 
@@ -284,7 +285,7 @@ def train_model(model,
             break
 
         elapsed = time.time() - start_time
-        result_to_save = f'Epoch took {timedelta(seconds=elapsed)} \n'
+        result_to_save = f'--> Epoch took {timedelta(seconds=elapsed)} \n'
         print(result_to_save)
         save_txt(result_to_save, result_filepath, mode='a')
 
