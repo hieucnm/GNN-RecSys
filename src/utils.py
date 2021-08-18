@@ -48,7 +48,7 @@ def read_data(file_path):
                           error_bad_lines=False)
     elif file_path.endswith('.csv'):
         obj = pd.read_csv(file_path)
-    elif file_path.endswith('.parquet'):
+    elif file_path.endswith('.parquet') or os.path.isdir(file_path):
         obj = pd.read_parquet(file_path)
     elif file_path.endswith('.pkl'):
         with open(file_path, 'rb') as handle:
