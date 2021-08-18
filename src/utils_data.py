@@ -270,8 +270,8 @@ def calculate_num_batches(train_eids_dict,
            num_batches_val_loss, num_batches_val_metrics
 
 
-def print_data_loaders(train_eids_dict, valid_eids_dict, subtrain_uids, valid_uids, test_uids,
-                       all_iids, ground_truth_subtrain, ground_truth_valid, all_eids_dict):
+def summary_data_sets(train_eids_dict, valid_eids_dict, subtrain_uids, valid_uids, test_uids,
+                      all_iids, ground_truth_subtrain, ground_truth_valid, all_eids_dict):
     print("train_eids_dict.keys:", train_eids_dict.keys())
     print("valid_eids_dict.keys:", valid_eids_dict.keys())
     print("subtrain_uids:", len(subtrain_uids))
