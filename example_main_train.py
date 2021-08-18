@@ -1,7 +1,10 @@
+import os
+
 import click
 import numpy as np
 import torch
 from dgl import heterograph
+import datetime as dt
 
 from src.utils_data import DataLoader, assign_graph_features, print_data_loaders, calculate_num_batches
 from src.utils import read_data, save_txt, save_everything
@@ -25,9 +28,17 @@ device = torch.device('cuda') if cuda else torch.device('cpu')
 
 class TrainDataPaths:
     def __init__(self):
-        self.result_filepath = 'examples/result_log.txt'
+        timestamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
         self.full_interaction_path = 'examples/user_item_clicks.csv'
         self.user_feat_path = 'examples/user_features.csv'
+        self.result_dir = f'examples/results/{timestamp}'
+
+        # self.full_interaction_path = '../data/training_data/interactions_d90/2021/07/04/'
+        # self.user_feat_path = '../data/training_data/preprocessed/2021/07/04/user_features.csv'
+        # self.result_dir = f'../outputs/{timestamp}'
+
+        os.makedirs(self.result_dir)
+        self.log_filepath = f'{self.result_dir}/running_log.txt'
 
 
 def train_full_model(fixed_params_path,
@@ -158,7 +169,7 @@ def train_full_model(fixed_params_path,
     hp_sentence = params
     hp_sentence.update(vars(fixed_params))
     hp_sentence = f'{str(hp_sentence)[1: -1]} \n'
-    save_txt(f'\n \n START - Hyperparameters \n{hp_sentence}', train_data_paths.result_filepath, "a")
+    save_txt(f'\n \n START - Hyperparameters \n{hp_sentence}', train_data_paths.log_filepath, "a")
     model, viz, best_metrics = train_model(
         model,
         num_epochs=fixed_params.num_epochs,
@@ -186,19 +197,19 @@ def train_full_model(fixed_params_path,
         ground_truth_subtrain=ground_truth_subtrain,
         ground_truth_valid=ground_truth_valid,
         remove_already_bought=True,
-        result_filepath=train_data_paths.result_filepath,
+        result_filepath=train_data_paths.log_filepath,
         start_epoch=fixed_params.start_epoch,
         patience=fixed_params.patience,
         pred=params['pred'],
         remove_false_negative=fixed_params.remove_false_negative
     )
 
-    # # Save everything
-    # save_everything(model, valid_graph, data, params, fixed_params)
-    #
-    # # Get viz & metrics
-    # if visualization:
-    #     plot_train_loss(hp_sentence, viz)
+    # Save everything
+    save_everything(model, valid_graph, data, params, fixed_params, save_dir=train_data_paths.result_dir)
+
+    # Get viz & metrics
+    if visualization:
+        plot_train_loss(hp_sentence, viz, save_dir=train_data_paths.result_dir)
 
     # Report performance on validation set
     sentence = ("BEST VALIDATION Precision "
@@ -207,7 +218,7 @@ def train_full_model(fixed_params_path,
                         best_metrics['recall'] * 100,
                         best_metrics['coverage'] * 100))
     log.info(sentence)
-    save_txt(sentence, train_data_paths.result_filepath, mode='a')
+    save_txt(sentence, train_data_paths.log_filepath, mode='a')
 
     # Report performance on test set
     log.debug('Test metrics start ...')
@@ -231,7 +242,7 @@ def train_full_model(fixed_params_path,
                                 recall * 100,
                                 coverage * 100))
             log.info(sentence)
-            save_txt(sentence, train_data_paths.result_filepath, mode='a')
+            save_txt(sentence, train_data_paths.log_filepath, mode='a')
 
 
 @click.command()

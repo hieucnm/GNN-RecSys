@@ -213,7 +213,7 @@ def train(data, fixed_params, data_paths,
     )
     hp_sentence = f'{str(hp_sentence)[1: -1]} \n'
 
-    save_txt(f'\n \n START - Hyperparameters \n{hp_sentence}', data_paths.result_filepath, "a")
+    save_txt(f'\n \n START - Hyperparameters \n{hp_sentence}', data_paths.log_filepath, "a")
 
     start_time = time.time()
 
@@ -246,7 +246,7 @@ def train(data, fixed_params, data_paths,
         ground_truth_subtrain=ground_truth_subtrain,
         ground_truth_valid=ground_truth_valid,
         remove_already_bought=True,
-        result_filepath=data_paths.result_filepath,
+        result_filepath=data_paths.log_filepath,
         start_epoch=fixed_params.start_epoch,
         patience=fixed_params.patience,
         pred=params['pred'],
@@ -257,7 +257,7 @@ def train(data, fixed_params, data_paths,
     )
     elapsed = time.time() - start_time
     result_to_save = f'\n {timedelta(seconds=elapsed)} \n END'
-    save_txt(result_to_save, data_paths.result_filepath, mode='a')
+    save_txt(result_to_save, data_paths.log_filepath, mode='a')
 
     if visualization:
         plot_train_loss(hp_sentence, viz)
@@ -270,7 +270,7 @@ def train(data, fixed_params, data_paths,
                         best_metrics['coverage'] * 100))
 
     log.info(sentence)
-    save_txt(sentence, data_paths.result_filepath, mode='a')
+    save_txt(sentence, data_paths.log_filepath, mode='a')
 
     # Report performance on test set
     log.debug('Test metrics start ...')
@@ -308,7 +308,7 @@ def train(data, fixed_params, data_paths,
                                 recall * 100,
                                 coverage * 100))
             log.info(sentence)
-            save_txt(sentence, data_paths.result_filepath, mode='a')
+            save_txt(sentence, data_paths.log_filepath, mode='a')
 
     if check_embedding:
         trained_model.eval()
@@ -320,7 +320,7 @@ def train(data, fixed_params, data_paths,
                                               data.spt_id,
                                               fixed_params.num_choices)
 
-                save_txt(result_sport, data_paths.result_filepath, mode='a')
+                save_txt(result_sport, data_paths.log_filepath, mode='a')
 
             already_bought_dict = create_already_bought(valid_graph,
                                                         all_eids_dict[('user', 'buys', 'item')],
@@ -358,7 +358,7 @@ def train(data, fixed_params, data_paths,
                          fixed_params.num_choices,
                          data.item_id_df,
                          fixed_params.iid_column,
-                         data_paths.result_filepath)
+                         data_paths.log_filepath)
 
             if fixed_params.iid_column == 'SPECIFIC ITEM_IDENTIFIER':
                 coverage_metrics = check_coverage(data.user_item_train,
@@ -385,7 +385,7 @@ def train(data, fixed_params, data_paths,
                     )
                 )
                 log.info(sentence)
-                save_txt(sentence, data_paths.result_filepath, mode='a')
+                save_txt(sentence, data_paths.log_filepath, mode='a')
 
         save_outputs(
             {
@@ -441,7 +441,7 @@ def train(data, fixed_params, data_paths,
     recap += f"\nLoop took {timedelta(seconds=elapsed)} for {len(viz['train_loss_list'])} epochs, an average of " \
              f"{timedelta(seconds=elapsed / len(viz['train_loss_list']))} per epoch"
     print(recap)
-    save_txt(recap, data_paths.result_filepath, mode='a')
+    save_txt(recap, data_paths.log_filepath, mode='a')
 
     return recall  # This is the 'test set' recall, on both purchases & clicks
 

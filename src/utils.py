@@ -2,7 +2,7 @@ import os
 import numpy as np
 import pandas as pd
 import pickle
-import datetime as dt
+import json
 import torch
 from dgl.data.utils import save_graphs
 
@@ -66,26 +66,19 @@ def softmax(x):
     return e_x / e_x.sum()
 
 
-def save_everything(trained_model, graph, data, params, fixed_params):
-    timestamp = str(dt.datetime.now()).replace(' ', '')
-    torch.save(trained_model.state_dict(), f'models/{timestamp}.pth')
+def save_everything(trained_model, graph, data, params, fixed_params, save_dir):
+
+    torch.save(trained_model.state_dict(), f'{save_dir}/model.pth')
+    print("Model saved!")
+
     # Save all necessary params
-    save_outputs(
-        {
-            f'{timestamp}_params': params,
-            f'{timestamp}_fixed_params': vars(fixed_params),
-        },
-        'models/'
-    )
-    print("Saved model & parameters to disk.")
+    pickle.dump(params, open(f'{save_dir}/params.pkl', 'wb'))
+    pickle.dump(fixed_params, open(f'{save_dir}/fixed_params.pkl', 'wb'))
+    print("Params and fixed params saved!")
 
     # Save graph & ID mapping
-    save_graphs(f'models/{timestamp}_graph.bin', [graph])
-    save_outputs(
-        {
-            f'{timestamp}_user_id': data.user_id_df,
-            f'{timestamp}_item_id': data.item_id_df,
-        },
-        'models/'
-    )
-    print("Saved graph & ID mapping to disk.")
+    save_graphs(f'{save_dir}/graph.bin', [graph])
+    data.user_id_df.to_csv(f'{save_dir}/user_id.csv', index=False)
+    data.item_id_df.to_csv(f'{save_dir}/item_id.csv', index=False)
+    print("Graph & ID mapping saved!")
+    print(f"Finish saving everything at {save_dir}")
