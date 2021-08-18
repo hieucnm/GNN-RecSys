@@ -139,6 +139,7 @@ class DataLoader:
         self.user_id_df = create_ids(self.user_item_train, fixed_params.uid_column)
         self.item_id_df = create_ids(self.user_item_train, fixed_params.iid_column)
 
+        print("--> running df_to_adjacency_list ...")
         (
             self.adjacency_dict,
             self.ground_truth_test,
@@ -157,6 +158,7 @@ class DataLoader:
             duplicates=fixed_params.duplicates
         )
 
+        print("--> assigning graph schema ...")
         if fixed_params.discern_clicks:
             self.graph_schema = {
                 ('user', 'converts', 'item'):

@@ -1,4 +1,6 @@
 import os
+import time
+
 import numpy as np
 import torch
 from dgl import heterograph
@@ -46,6 +48,8 @@ def main(args):
     )
 
     # First of all, load data in form of dataframes, split into train dataframe and test dataframe
+    print('--> loading data ...')
+    start_time = time.time()
     train_data_paths = TrainDataPaths(args)
     full_interaction_data = read_data(train_data_paths.full_interaction_path)
     train_df, test_df = presplit_data(full_interaction_data,
@@ -55,18 +59,25 @@ def main(args):
                                       test_size_days=1,
                                       sort=True
                                       )
+    print('--> loaded data, elapsed time =', time.time() - start_time)
 
     train_data_paths.train_path = train_df
     train_data_paths.test_path = test_df
+    print('--> initializing data ...')
+    start_time = time.time()
     data = DataLoader(train_data_paths, fixed_params)
+    print('--> initialized data, elapsed time =', time.time() - start_time)
 
     # Create whole graph (train, valid, test)
+    print('--> creating graph ...')
+    start_time = time.time()
     valid_graph = heterograph(data.graph_schema)
+    print('--> created graph, elapsed time =', time.time() - start_time)
 
-    valid_graph = assign_graph_features(valid_graph,
-                                        fixed_params,
-                                        data
-                                        )
+    print('--> assigning features to graph ...')
+    start_time = time.time()
+    valid_graph = assign_graph_features(valid_graph, fixed_params, data)
+    print('--> assigned features to graph, elapsed time =', time.time() - start_time)
 
     # Split user_ids in to train, valid and test set
     (

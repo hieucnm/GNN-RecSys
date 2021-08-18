@@ -112,10 +112,12 @@ def df_to_adjacency_list(user_item_train: pd.DataFrame,
         .merge(item_id_df, how='left', on=iid_column)
 
     if duplicates in ['keep_last', 'count_occurrence']:
+        print("--> running grouped_df ...")
         grouped_df = user_item_train \
             .groupby([uid_new_col, iid_new_col])[iid_new_col].count() \
             .reset_index(name='num_interaction')
 
+        print("--> running user_item_train ...")
         user_item_train = user_item_train \
             .drop_duplicates(subset=[uid_new_col, iid_new_col], keep='last') \
             .reset_index(drop=True) \
@@ -154,6 +156,7 @@ def df_to_adjacency_list(user_item_train: pd.DataFrame,
             }
         )
 
+    print("--> running user_item_test ...")
     user_item_test = user_item_test \
         .merge(user_id_df, how='left', on=uid_column) \
         .merge(item_id_df, how='left', on=iid_column)
