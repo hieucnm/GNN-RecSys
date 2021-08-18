@@ -47,7 +47,6 @@ def main(args):
         duplicates=args.duplicates,
     )
 
-    # First of all, load data in form of dataframes, split into train dataframe and test dataframe
     print('--> loading data ...')
     start_time = time.time()
     train_data_paths = TrainDataPaths(args)
@@ -68,7 +67,6 @@ def main(args):
     data = DataLoader(train_data_paths, fixed_params)
     print('--> initialized data, elapsed time =', time.time() - start_time)
 
-    # Create whole graph (train, valid, test)
     print('--> creating graph ...')
     start_time = time.time()
     valid_graph = heterograph(data.graph_schema)
@@ -79,7 +77,8 @@ def main(args):
     valid_graph = assign_graph_features(valid_graph, fixed_params, data)
     print('--> assigned features to graph, elapsed time =', time.time() - start_time)
 
-    # Split user_ids in to train, valid and test set
+    print('--> splitting train, valid, test set ...')
+    start_time = time.time()
     (
         train_graph,
         train_eids_dict,
@@ -103,13 +102,13 @@ def main(args):
         fixed_params.clicks_sample,
         fixed_params.converts_sample,
     )
-
-    # If starting with a new graph, you should check data after splitting before continue
-    # Get into the function below to print out anything you wanna check
+    print('--> split done, elapsed time =', time.time() - start_time)
     print_data_loaders(train_eids_dict, valid_eids_dict, subtrain_uids, valid_uids, test_uids,
                        all_iids, ground_truth_subtrain, ground_truth_valid, all_eids_dict)
 
     # Initialize edges and nodes loaders for the above data sets
+    print('--> initializing edge_loaders and node_loaders ...')
+    start_time = time.time()
     (
         edgeloader_train,
         edgeloader_valid,
@@ -129,6 +128,7 @@ def main(args):
                              n_layers=args.n_layers,
                              neg_sample_size=args.neg_sample_size,
                              )
+    print('--> initialized loaders, elapsed time =', time.time() - start_time)
 
     # Calculate approximate number of nodes in a batch, based on number of edges in a batch
     (
@@ -145,7 +145,8 @@ def main(args):
                               all_iids,
                               fixed_params)
 
-    # Init model
+    print('--> initializing model ...')
+    start_time = time.time()
     dim_dict = {'user': valid_graph.nodes['user'].data['features'].shape[1],
                 'item': data.item_id_df.shape[0],
                 'out': args.out_dim,
@@ -163,6 +164,7 @@ def main(args):
     if cuda:
         model = model.to(device)
 
+    print('--> initialized model, elapsed time =', time.time() - start_time)
     print(model.eval())
 
     # Train
