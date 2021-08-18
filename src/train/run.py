@@ -86,6 +86,9 @@ def train_model(model,
 
     # TRAINING
     for epoch in range(start_epoch, num_epochs):
+
+        edgeloader_train.set_epoch(epoch)  # <--- necessary for data_loader with DDP.
+
         start_time = time.time()
         model.train()  # Because if not, after eval, dropout would be still be inactive
         total_loss = 0

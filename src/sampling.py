@@ -240,3 +240,35 @@ def generate_dataloaders(valid_graph,
     node_loader_test = dgl.dataloading.NodeDataLoader(**node_param_test)
 
     return edge_loader_train, edge_loader_valid, node_loader_sub_train, node_loader_valid, node_loader_test
+
+
+# noinspection PyTypeChecker,SpellCheckingInspection
+def generate_test_loaders(train_graph,
+                          test_uids,
+                          all_iids,
+                          fixed_params,
+                          num_workers,
+                          **params,
+                          ):
+    """
+    Similar to generate_dataloaders, but only for test set
+    """
+    n_layers = params['n_layers'] - 1  # except the embedding layer
+
+    if fixed_params.neighbor_sampler == 'full':
+        sampler = dgl.dataloading.MultiLayerFullNeighborSampler(n_layers)
+    elif fixed_params.neighbor_sampler == 'partial':
+        sampler = dgl.dataloading.MultiLayerNeighborSampler([1, 1, 1], replace=False)
+    else:
+        raise KeyError('Neighbor sampler {} not recognized.'.format(fixed_params.neighbor_sampler))
+
+    node_param_test = {
+        'g': train_graph,
+        'nids': {'user': test_uids, 'item': all_iids},
+        'block_sampler': sampler,
+        'shuffle': False,
+        'drop_last': False,
+        'num_workers': num_workers,
+    }
+    node_loader_test = dgl.dataloading.NodeDataLoader(**node_param_test)
+    return node_loader_test
