@@ -140,7 +140,8 @@ def train_model(model,
                            device=device,
                            )
             if (i + 1) % 10 == 0:
-                print("Edge batch {}/{}: loss = {:.5f}".format(i+1, num_batches_train, loss.item()))
+                print("Edge batch {}/{}: loss = {:.5f}".format(
+                    i+1, num_batches_train, loss.item() / len(blocks)))
 
             if epoch > 0:  # For the epoch 0, no training (just report loss)
                 loss.backward()
@@ -201,7 +202,8 @@ def train_model(model,
                                    )
                 total_loss += val_loss.item()
                 if (i + 1) % 10 == 0:
-                    print("Edge batch {}/{}: loss = {:.5f}".format(i + 1, num_batches_val_loss, val_loss.item()))
+                    print("Edge batch {}/{}: loss = {:.5f}".format(
+                        i + 1, num_batches_val_loss, val_loss.item() / len(blocks)))
             val_avg_loss = total_loss / i
             model.val_loss_list.append(val_avg_loss)
 
