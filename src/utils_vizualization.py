@@ -3,6 +3,7 @@ import json
 import matplotlib.pyplot as plt
 from datetime import datetime
 import textwrap
+from os import makedirs
 
 import numpy as np
 
@@ -24,7 +25,7 @@ def plot_train_loss(hp_sentence, viz, save_dir):
         plt.plot(x, viz['train_loss_list'])
         plt.plot(x, viz['val_loss_list'])
         plt.legend(['training loss', 'valid loss'], loc='upper left')
-        plt.savefig(f'{save_dir}/plot_loss.png')
+        plt.savefig(f'{save_dir}/loss.png')
         plt.close(fig)
 
     if 'val_recall_list' in viz.keys():
@@ -41,6 +42,5 @@ def plot_train_loss(hp_sentence, viz, save_dir):
         plt.plot(x, viz['val_coverage_list'])
         plt.legend(['training precision', 'training recall', 'training coverage/10',
                     'valid precision', 'valid recall', 'valid coverage/10'], loc='upper left')
-        plt.savefig(f'{save_dir}/plot_metrics.png')
+        plt.savefig(f'{save_dir}/metrics.png')
         plt.close(fig)
-    print(f"Finish saving plots at {save_dir}")

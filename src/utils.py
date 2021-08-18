@@ -2,9 +2,9 @@ import os
 import numpy as np
 import pandas as pd
 import pickle
-import json
-import torch
 from dgl.data.utils import save_graphs
+
+from src.utils_vizualization import plot_train_loss
 
 
 def save_txt(data_to_save, filepath, mode='a'):
@@ -66,20 +66,27 @@ def softmax(x):
     return e_x / e_x.sum()
 
 
-def save_everything(trained_model, graph, data, params, fixed_params, save_dir):
-
-    torch.save(trained_model.state_dict(), f'{save_dir}/model.pth')
-    print("Model saved!")
+def save_everything(graph, data, params, fixed_params, hp_sentence, viz, save_dir):
 
     # Save all necessary params
-    pickle.dump(params, open(f'{save_dir}/params.pkl', 'wb'))
-    pickle.dump(fixed_params, open(f'{save_dir}/fixed_params.pkl', 'wb'))
-    print("Params and fixed params saved!")
+    param_dir = f"{save_dir.rstrip('/')}/params"
+    os.makedirs(param_dir)
+    pickle.dump(params, open(f'{param_dir}/params.pkl', 'wb'))
+    pickle.dump(fixed_params, open(f'{param_dir}/fixed_params.pkl', 'wb'))
+    print("Params & fixed params saved!")
 
     # Save graph & ID mapping
-    save_graphs(f'{save_dir}/graph.bin', [graph])
-    data.user_id_df.to_csv(f'{save_dir}/user_id.csv', index=False)
-    data.item_id_df.to_csv(f'{save_dir}/item_id.csv', index=False)
+    graph_dir = f"{save_dir.rstrip('/')}/graph"
+    os.makedirs(graph_dir)
+    save_graphs(f'{graph_dir}/graph.bin', [graph])
+    data.user_id_df.to_csv(f'{graph_dir}/user_id.csv', index=False)
+    data.item_id_df.to_csv(f'{graph_dir}/item_id.csv', index=False)
     print("Graph & ID mapping saved!")
+
+    # Save plots
+    plot_dir = f"{save_dir.rstrip('/')}/plots"
+    os.makedirs(plot_dir)
+    plot_train_loss(hp_sentence, viz, save_dir=plot_dir)
+    print(f"Learning plots saved!")
     print(f"Finish saving everything at {save_dir}")
 

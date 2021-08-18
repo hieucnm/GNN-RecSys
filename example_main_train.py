@@ -202,12 +202,12 @@ def main(args):
         optimizer=fixed_params.optimizer,
         use_recency=fixed_params.use_recency,
         result_filepath=train_data_paths.log_filepath,
-        remove_false_negative=fixed_params.remove_false_negative
+        remove_false_negative=fixed_params.remove_false_negative,
+        save_dir=train_data_paths.result_dir
     )
 
     # Save everything
-    save_everything(model, valid_graph, data, args, fixed_params, save_dir=train_data_paths.result_dir)
-    plot_train_loss(hp_sentence, viz, save_dir=train_data_paths.result_dir)
+    save_everything(valid_graph, data, args, fixed_params, hp_sentence, viz, save_dir=train_data_paths.result_dir)
 
     # Report performance on validation set
     sentence = ("BEST VALIDATION Precision "

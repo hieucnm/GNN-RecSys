@@ -26,6 +26,7 @@ def train_model(model,
                 edgeloader_valid,
                 loss_fn,
                 delta,
+                save_dir,
                 neg_sample_size,
                 use_recency=False,
                 device=None,
@@ -283,6 +284,11 @@ def train_model(model,
         result_to_save = f'Epoch took {timedelta(seconds=elapsed)} \n'
         print(result_to_save)
         save_txt(result_to_save, result_filepath, mode='a')
+
+        # save model every epoch after first epoch
+        if epoch > 0:
+            torch.save(model.state_dict(), f'{save_dir}/model_ep_{epoch}.pth')
+            print("Model saved!")
 
     viz = {'train_loss_list': model.train_loss_list,
            'train_precision_list': model.train_precision_list,
