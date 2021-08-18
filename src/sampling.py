@@ -119,7 +119,7 @@ def train_valid_split(valid_graph: dgl.DGLHeteroGraph,
            all_iids, ground_truth_subtrain, ground_truth_valid, all_eids_dict
 
 
-# noinspection PyTypeChecker
+# noinspection PyTypeChecker,SpellCheckingInspection
 def generate_dataloaders(valid_graph,
                          train_graph,
                          train_eids_dict,
@@ -167,82 +167,72 @@ def generate_dataloaders(valid_graph,
         params['neg_sample_size']
     )
 
+    edge_param_train = {
+        'g': valid_graph,
+        'eids': train_eids_dict,
+        'block_sampler': sampler,
+        'negative_sampler': sampler_n,
+        'batch_size': fixed_params.edge_batch_size,
+        'shuffle': True,
+        'drop_last': False,  # Drop last batch if non-full
+        'pin_memory': True,  # Helps the transfer to GPU
+        'num_workers': num_workers,
+    }
+
+    if params['device'].type != 'cpu':
+        edge_param_train.update({
+            'device': params['device'],
+            'use_ddp': params['use_ddp']
+        })
+
+    # Train edge loader
     if fixed_params.remove_train_eids:
-        edgeloader_train = dgl.dataloading.EdgeDataLoader(
-            valid_graph,
-            train_eids_dict,
-            sampler,
-            g_sampling=train_graph,
-            negative_sampler=sampler_n,
-            batch_size=fixed_params.edge_batch_size,
-            shuffle=True,
-            drop_last=False,  # Drop last batch if non-full
-            pin_memory=True,  # Helps the transfer to GPU
-            num_workers=num_workers,
-        )
+        edge_param_train.update({'g_sampling': train_graph})
     else:
-        edgeloader_train = dgl.dataloading.EdgeDataLoader(
-            train_graph,
-            train_eids_dict,
-            sampler,
-            exclude='reverse_types',
-            reverse_etypes={
-                'converts': 'converted-by',
-                'converted-by': 'converts',
-                'clicks': 'clicked-by',
-                'clicked-by': 'clicks'
-            },
-            negative_sampler=sampler_n,
-            batch_size=fixed_params.edge_batch_size,
-            shuffle=True,
-            drop_last=False,
-            pin_memory=True,
-            num_workers=num_workers,
-        )
+        edge_param_train.update({
+            'exclude': 'reverse_types',
+            'reverse_etypes': {
+                'converts': 'converted-by', 'converted-by': 'converts',
+                'clicks': 'clicked-by', 'clicked-by': 'clicks'
+            }})
+    edge_loader_train = dgl.dataloading.EdgeDataLoader(**edge_param_train)
 
-    edgeloader_valid = dgl.dataloading.EdgeDataLoader(
-        valid_graph,
-        valid_eids_dict,
-        sampler,
-        g_sampling=train_graph,
-        negative_sampler=sampler_n,
-        batch_size=fixed_params.edge_batch_size,
-        shuffle=True,
-        drop_last=False,
-        pin_memory=True,
-        num_workers=num_workers,
-    )
+    # Valid edge loader
+    edge_param_valid = edge_param_train.copy()
+    edge_param_valid.pop("exclude", None)
+    edge_param_valid.pop("reverse_etypes", None)
+    edge_param_valid.pop("g_sampling", None)
+    edge_param_train.update({'g_sampling': train_graph})
+    edge_param_valid['eids'] = valid_eids_dict
+    edge_param_valid['shuffle'] = False
+    edge_loader_valid = dgl.dataloading.EdgeDataLoader(**edge_param_valid)
 
-    nodeloader_subtrain = dgl.dataloading.NodeDataLoader(
-        train_graph,
-        {'user': subtrain_uids, 'item': all_iids},
-        sampler,
-        batch_size=fixed_params.node_batch_size,
-        shuffle=True,
-        drop_last=False,
-        num_workers=num_workers,
-    )
+    node_param_train = {
+        'g': train_graph,
+        'nids': {'user': subtrain_uids, 'item': all_iids},
+        'block_sampler': sampler,
+        'shuffle': True,
+        'drop_last': False,
+        'num_workers': num_workers,
+    }
+    if params['device'].type != 'cpu':
+        node_param_train.update({
+            'device': params['device'],
+            'use_ddp': params['use_ddp']
+        })
 
-    nodeloader_valid = dgl.dataloading.NodeDataLoader(
-        train_graph,
-        {'user': valid_uids, 'item': all_iids},
-        sampler,
-        batch_size=fixed_params.node_batch_size,
-        shuffle=True,
-        drop_last=False,
-        num_workers=num_workers,
-    )
+    # Sub-train node loader
+    node_loader_sub_train = dgl.dataloading.NodeDataLoader(**node_param_train)
 
-    test_node_ids = {'user': test_uids, 'item': all_iids}
+    # Valid node loader
+    node_param_valid = node_param_train.copy()
+    node_param_valid['nids'] = {'user': valid_uids, 'item': all_iids}
+    node_param_valid['shuffle'] = False
+    node_loader_valid = dgl.dataloading.NodeDataLoader(**node_param_valid)
 
-    nodeloader_test = dgl.dataloading.NodeDataLoader(
-        valid_graph,
-        test_node_ids,
-        sampler,
-        batch_size=fixed_params.node_batch_size,
-        shuffle=True,
-        drop_last=False,
-        num_workers=num_workers
-    )
+    # Test node loader
+    node_param_test = node_param_valid.copy()
+    node_param_test['nids'] = {'user': test_uids, 'item': all_iids}
+    node_loader_test = dgl.dataloading.NodeDataLoader(**node_param_test)
 
-    return edgeloader_train, edgeloader_valid, nodeloader_subtrain, nodeloader_valid, nodeloader_test
+    return edge_loader_train, edge_loader_valid, node_loader_sub_train, node_loader_valid, node_loader_test

@@ -151,7 +151,7 @@ def train_model(model,
             if epoch == 0 and i > 10:
                 break  # For the epoch 0, report loss on only subset
 
-        train_avg_loss = total_loss / i
+        train_avg_loss = total_loss / (i + 1)
         model.train_loss_list.append(train_avg_loss)
 
         print('VALIDATION LOSS')
@@ -204,21 +204,19 @@ def train_model(model,
                 if (i + 1) % 10 == 0:
                     print("Edge batch {}/{}: loss = {:.5f}".format(
                         i + 1, num_batches_val_loss, val_loss.item() / len(blocks)))
-            val_avg_loss = total_loss / i
+            val_avg_loss = total_loss / (i + 1)
             model.val_loss_list.append(val_avg_loss)
 
         ############
         # METRICS PER EPOCH 
-        if get_metrics and epoch % 10 == 1:
+        if get_metrics and epoch > 0:
             model.eval()
             with torch.no_grad():
-                # training metrics
                 print('TRAINING METRICS')
                 y = get_embeddings(train_graph,
                                    out_dim,
                                    model,
                                    nodeloader_subtrain,
-                                   num_batches_subtrain,
                                    device
                                    )
 
@@ -239,7 +237,6 @@ def train_model(model,
                                    out_dim,
                                    model,
                                    nodeloader_valid,
-                                   num_batches_val_metrics,
                                    device,
                                    )
 
@@ -253,7 +250,7 @@ def train_model(model,
                                                                            remove_already_bought,
                                                                            device,
                                                                            pred)
-                sentence = '''Epoch {:05d} || TRAINING Loss {:.5f} | Precision {:.3f}% | Recall {:.3f}% | Coverage {:.2f}% 
+                sentence = '''Epoch {:02d} || TRAINING Loss {:.5f} | Precision {:.3f}% | Recall {:.3f}% | Coverage {:.2f}% 
                 || VALIDATION Loss {:.5f} | Precision {:.3f}% | Recall {:.3f}% | Coverage {:.2f}% '''.format(
                     epoch, train_avg_loss, train_precision * 100, train_recall * 100, train_coverage * 100,
                     val_avg_loss, val_precision * 100, val_recall * 100, val_coverage * 100)
@@ -273,7 +270,7 @@ def train_model(model,
                     best_metrics = {'recall': val_recall, 'precision': val_precision, 'coverage': val_coverage}
 
         else:
-            sentence = "Epoch {:05d} | Training Loss {:.5f} | Validation Loss {:.5f} | ".format(
+            sentence = "Epoch {:02d} | Training Loss {:.5f} | Validation Loss {:.5f} | ".format(
                 epoch, train_avg_loss, val_avg_loss)
             print(sentence)
             save_txt(sentence, result_filepath, mode='a')
@@ -307,13 +304,12 @@ def train_model(model,
 def get_embeddings(g,
                    out_dim: int,
                    trained_model,
-                   nodeloader_test,
-                   num_batches_valid: int,
+                   node_loader,
                    device=None):
     """
-    Fetch the embeddings for all the nodes in the nodeloader.
+    Fetch the embeddings for all the nodes in the node_loader.
 
-    Nodeloader is preferable when computing embeddings because we can specify which nodes to compute the embedding for,
+    Node Loader is preferable when computing embeddings because we can specify which nodes to compute the embedding for,
     and only have relevant nodes in the computational blocks. Whereas Edgeloader is preferable for training, because
     we generate negative edges also.
     """
@@ -327,11 +323,9 @@ def get_embeddings(g,
         y = {ntype: torch.zeros(g.num_nodes(ntype), out_dim).to(device)
              for ntype in g.ntypes}
 
-    i2 = 0
-    for input_nodes, output_nodes, blocks in nodeloader_test:
-        i2 += 1
+    for i2, (input_nodes, output_nodes, blocks) in enumerate(node_loader):
         if i2 % 10 == 0:
-            print("Computing embeddings: Batch {} out of {}".format(i2, num_batches_valid))
+            print("Computing embeddings: batch {}/{}".format(i2, len(node_loader)))
         if cuda:
             blocks = [b.to(device) for b in blocks]
         input_features = blocks[0].srcdata['features']

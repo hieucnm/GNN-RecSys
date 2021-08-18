@@ -7,7 +7,7 @@ from dgl import heterograph
 import datetime as dt
 import argparse
 
-from src.utils_data import DataLoader, assign_graph_features, print_data_loaders, calculate_num_batches
+from src.utils_data import DataLoader, assign_graph_features, summary_data_sets, calculate_num_batches
 from src.utils import read_data, save_txt, save_everything
 from src.model import ConvModel, max_margin_loss
 from src.sampling import train_valid_split, generate_dataloaders
@@ -81,15 +81,15 @@ def main(args):
     start_time = time.time()
     (
         train_graph,
-        train_eids_dict,
-        valid_eids_dict,
-        subtrain_uids,
-        valid_uids,
-        test_uids,
-        all_iids,
-        ground_truth_subtrain,
+        train_eid_dict,
+        valid_eid_dict,
+        sub_train_uid,
+        valid_uid,
+        test_uid,
+        all_iid,
+        ground_truth_sub_train,
         ground_truth_valid,
-        all_eids_dict
+        all_eid_dict
     ) = train_valid_split(
         valid_graph,
         data.ground_truth_test,
@@ -103,46 +103,22 @@ def main(args):
         fixed_params.converts_sample,
     )
     print('--> split done, elapsed time =', time.time() - start_time)
-    print_data_loaders(train_eids_dict, valid_eids_dict, subtrain_uids, valid_uids, test_uids,
-                       all_iids, ground_truth_subtrain, ground_truth_valid, all_eids_dict)
-
-    # Initialize edges and nodes loaders for the above data sets
-    print('--> initializing edge_loaders and node_loaders ...')
-    start_time = time.time()
-    (
-        edgeloader_train,
-        edgeloader_valid,
-        nodeloader_subtrain,
-        nodeloader_valid,
-        nodeloader_test
-    ) = generate_dataloaders(valid_graph,
-                             train_graph,
-                             train_eids_dict,
-                             valid_eids_dict,
-                             subtrain_uids,
-                             valid_uids,
-                             test_uids,
-                             all_iids,
-                             fixed_params,
-                             num_workers=args.num_workers,
-                             n_layers=args.n_layers,
-                             neg_sample_size=args.neg_sample_size,
-                             )
-    print('--> initialized loaders, elapsed time =', time.time() - start_time)
+    summary_data_sets(train_eid_dict, valid_eid_dict, sub_train_uid, valid_uid, test_uid,
+                      all_iid, ground_truth_sub_train, ground_truth_valid, all_eid_dict)
 
     # Calculate approximate number of nodes in a batch, based on number of edges in a batch
     (
         num_batches_train,
-        num_batches_subtrain,
+        num_batches_sub_train,
         num_batches_test,
         num_batches_val_loss,
         num_batches_val_metrics
-    ) = calculate_num_batches(train_eids_dict,
-                              valid_eids_dict,
-                              subtrain_uids,
-                              valid_uids,
-                              test_uids,
-                              all_iids,
+    ) = calculate_num_batches(train_eid_dict,
+                              valid_eid_dict,
+                              sub_train_uid,
+                              valid_uid,
+                              test_uid,
+                              all_iid,
                               fixed_params)
 
     print('--> initializing model ...')
@@ -167,6 +143,31 @@ def main(args):
     print('--> initialized model, elapsed time =', time.time() - start_time)
     print(model.eval())
 
+    print('--> initializing edge_loaders and node_loaders ...')
+    start_time = time.time()
+    (
+        edge_loader_train,
+        edge_loader_valid,
+        node_loader_sub_train,
+        node_loader_valid,
+        node_loader_test
+    ) = generate_dataloaders(valid_graph,
+                             train_graph,
+                             train_eid_dict,
+                             valid_eid_dict,
+                             sub_train_uid,
+                             valid_uid,
+                             test_uid,
+                             all_iid,
+                             fixed_params,
+                             num_workers=args.num_workers if not cuda else 0,
+                             n_layers=args.n_layers,
+                             neg_sample_size=args.neg_sample_size,
+                             device=device,
+                             use_ddp=args.use_ddp
+                             )
+    print('--> initialized loaders, elapsed time =', time.time() - start_time)
+
     # Train
     hp_sentence = vars(args)
     hp_sentence.update(vars(fixed_params))
@@ -174,35 +175,35 @@ def main(args):
     save_txt(f'\n \n START - Hyper-parameters \n{hp_sentence}', train_data_paths.log_filepath, "a")
     model, viz, best_metrics = train_model(
         model,
-        num_epochs=fixed_params.num_epochs,
-        num_batches_train=num_batches_train,
-        num_batches_val_loss=num_batches_val_loss,
-        edgeloader_train=edgeloader_train,
-        edgeloader_valid=edgeloader_valid,
-        loss_fn=max_margin_loss,
-        delta=args.delta,
-        neg_sample_size=args.neg_sample_size,
-        use_recency=fixed_params.use_recency,
-        device=device,
-        optimizer=fixed_params.optimizer,
-        lr=args.lr,
-        get_metrics=True,
         train_graph=train_graph,
         valid_graph=valid_graph,
-        nodeloader_valid=nodeloader_valid,
-        nodeloader_subtrain=nodeloader_subtrain,
-        k=fixed_params.k,
-        out_dim=args.out_dim,
+        edgeloader_train=edge_loader_train,
+        edgeloader_valid=edge_loader_valid,
+        nodeloader_valid=node_loader_valid,
+        nodeloader_subtrain=node_loader_sub_train,
+        num_batches_train=num_batches_train,
+        num_batches_val_loss=num_batches_val_loss,
+        num_batches_subtrain=num_batches_sub_train,
         num_batches_val_metrics=num_batches_val_metrics,
-        num_batches_subtrain=num_batches_subtrain,
-        bought_eids=train_eids_dict[('user', 'converts', 'item')],
-        ground_truth_subtrain=ground_truth_subtrain,
+        ground_truth_subtrain=ground_truth_sub_train,
         ground_truth_valid=ground_truth_valid,
+        bought_eids=train_eid_dict[('user', 'converts', 'item')],
         remove_already_bought=True,
-        result_filepath=train_data_paths.log_filepath,
-        start_epoch=fixed_params.start_epoch,
-        patience=fixed_params.patience,
+        get_metrics=True,
+        loss_fn=max_margin_loss,
+        device=device,
+        lr=args.lr,
         pred=args.pred,
+        delta=args.delta,
+        out_dim=args.out_dim,
+        patience=args.patience,
+        num_epochs=args.num_epochs,
+        start_epoch=args.start_epoch,
+        neg_sample_size=args.neg_sample_size,
+        k=fixed_params.k,
+        optimizer=fixed_params.optimizer,
+        use_recency=fixed_params.use_recency,
+        result_filepath=train_data_paths.log_filepath,
         remove_false_negative=fixed_params.remove_false_negative
     )
 
@@ -223,7 +224,7 @@ def main(args):
     log.debug('Test metrics start ...')
     model.eval()
     with torch.no_grad():
-        embeddings = get_embeddings(valid_graph, args.out_dim, model, nodeloader_test, num_batches_test, device)
+        embeddings = get_embeddings(valid_graph, args.out_dim, model, node_loader_test, device)
 
         for ground_truth in [data.ground_truth_convert_test, data.ground_truth_test]:
             precision, recall, coverage = get_metrics_at_k(embeddings,
@@ -231,7 +232,7 @@ def main(args):
                                                            model,
                                                            args.out_dim,
                                                            ground_truth,
-                                                           all_eids_dict[('user', 'converts', 'item')],
+                                                           all_eid_dict[('user', 'converts', 'item')],
                                                            fixed_params.k,
                                                            False,  # Remove already bought
                                                            device,
@@ -273,6 +274,8 @@ parser.add_argument('--check-embedding', action='store_true', default=False, hel
 parser.add_argument('--duplicates', type=str, default='count_occurrence',
                     choices=['count_occurrence', 'keep_all', 'keep_last'],
                     help='Way to handle duplicate interactions')
+
+parser.add_argument('--use-ddp', action='store_true', default=False, help='Use DistributedDataParallel')
 
 
 if __name__ == '__main__':
