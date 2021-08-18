@@ -41,7 +41,6 @@ def plot_train_loss(hp_sentence, viz, save_dir):
         plt.plot(x, viz['val_coverage_list'])
         plt.legend(['training precision', 'training recall', 'training coverage/10',
                     'valid precision', 'valid recall', 'valid coverage/10'], loc='upper left')
-        plt.savefig('plots/' + str(datetime.now())[:-10] + 'metrics.png')
         plt.savefig(f'{save_dir}/plot_metrics.png')
         plt.close(fig)
     print(f"Finish saving plots at {save_dir}")
