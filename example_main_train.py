@@ -233,7 +233,7 @@ def main(args):
 
 parser = argparse.ArgumentParser("Graph Learning")
 parser.add_argument('-ip', '--interaction-path', type=str,
-                    default='/home/ubuntu/workspace/GNN-RecSys/examples/user_item_clicks.csv',
+                    default='/home/ubuntu/workspace/GNN-RecSys/examples/user_item_clicks.parquet',
                     help='Path to load the historical interactions of user-item to build the graph.')
 parser.add_argument('-up', '--user-feature-path', type=str,
                     default='/home/ubuntu/workspace/GNN-RecSys/examples/user_features.csv',

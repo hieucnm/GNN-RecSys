@@ -75,8 +75,8 @@ class FixedParameters:
             self.etype.append(('user', 'clicks', 'item'))
             self.reverse_etype[('user', 'clicks', 'item')] = ('item', 'clicked-by', 'user')
 
-        self.uid_column = 'user_id'
-        self.iid_column = 'item_id'
+        self.uid_column = 'src_id'
+        self.iid_column = 'ad_cate'
         self.pred = 'cos'  # cosine similarity
         self.k = 10
         self.num_choices = 10

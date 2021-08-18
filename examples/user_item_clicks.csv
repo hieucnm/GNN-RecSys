@@ -1,4 +1,4 @@
-user_id,item_id,date,converted
+src_id,ad_cate,date,converted
 560,310,2021-08-17,0
 672,471,2021-08-17,0
 818,305,2021-08-17,0

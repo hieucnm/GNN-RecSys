@@ -45,7 +45,6 @@ def presplit_data(user_item_interaction_data: pd.DataFrame,
     """
 
     np.random.seed(11)
-
     if num_min > 0:
         user_item_interaction_data = user_item_interaction_data[
             user_item_interaction_data[uid_column].map(
@@ -58,17 +57,18 @@ def presplit_data(user_item_interaction_data: pd.DataFrame,
                                                axis=0,
                                                inplace=True)
         # Split into train & test sets
-        most_recent_date = datetime.strptime(max(user_item_interaction_data[date_column]), '%Y-%m-%d')
-        limit_date = datetime.strftime(
-            most_recent_date - timedelta(days=test_size_days),
-            format='%Y-%m-%d'
-        )
+        # most_recent_date = datetime.strptime(max(user_item_interaction_data[date_column]), '%Y-%m-%d')
+        # limit_date = datetime.strftime(most_recent_date - timedelta(days=test_size_days), format='%Y-%m-%d')
+        most_recent_date = max(user_item_interaction_data[date_column])
+        limit_date = most_recent_date - timedelta(days=test_size_days)
         train_set = user_item_interaction_data[user_item_interaction_data[date_column] <= limit_date]
         test_set = user_item_interaction_data[user_item_interaction_data[date_column] > limit_date]
 
     else:
-        most_recent_date = datetime.strptime(max(user_item_interaction_data[date_column]), '%Y-%m-%d')
-        oldest_date = datetime.strptime(min(user_item_interaction_data[date_column]), '%Y-%m-%d')
+        # most_recent_date = datetime.strptime(max(user_item_interaction_data[date_column]), '%Y-%m-%d')
+        # oldest_date = datetime.strptime(min(user_item_interaction_data[date_column]), '%Y-%m-%d')
+        most_recent_date = max(user_item_interaction_data[date_column])
+        oldest_date = min(user_item_interaction_data[date_column])
         total_days = timedelta(days=(most_recent_date - oldest_date).days)  # To be tested
         test_size = test_size_days / total_days.days
         test_set = user_item_interaction_data.sample(frac=test_size, random_state=200)
