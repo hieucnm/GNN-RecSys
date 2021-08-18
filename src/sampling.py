@@ -205,6 +205,8 @@ def generate_dataloaders(valid_graph,
     edge_param_train.update({'g_sampling': train_graph})
     edge_param_valid['eids'] = valid_eids_dict
     edge_param_valid['shuffle'] = False
+    if 'use_ddp' in edge_param_valid:
+        edge_param_valid['use_ddp'] = False
     edge_loader_valid = dgl.dataloading.EdgeDataLoader(**edge_param_valid)
 
     node_param_train = {
@@ -228,6 +230,8 @@ def generate_dataloaders(valid_graph,
     node_param_valid = node_param_train.copy()
     node_param_valid['nids'] = {'user': valid_uids, 'item': all_iids}
     node_param_valid['shuffle'] = False
+    if 'use_ddp' in node_param_valid:
+        node_param_valid['use_ddp'] = False
     node_loader_valid = dgl.dataloading.NodeDataLoader(**node_param_valid)
 
     # Test node loader
