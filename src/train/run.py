@@ -117,8 +117,6 @@ def train_model(model,
                 pos_g = pos_g.to(device)
                 neg_g = neg_g.to(device)
 
-            if (i + 1) % 10 == 0:
-                print("Edge batch {}/{}".format(i+1, num_batches_train))
             input_features = blocks[0].srcdata['features']
             # recency (TO BE CLEANED)
             recency_scores = None
@@ -141,6 +139,8 @@ def train_model(model,
                            cuda=cuda,
                            device=device,
                            )
+            if (i + 1) % 10 == 0:
+                print("Edge batch {}/{}: loss = {:.5f}".format(i+1, num_batches_train, loss.item()))
 
             if epoch > 0:  # For the epoch 0, no training (just report loss)
                 loss.backward()
@@ -158,8 +158,6 @@ def train_model(model,
         with torch.no_grad():
             total_loss = 0
             for i, (_, pos_g, neg_g, blocks) in enumerate(edgeloader_valid):
-                if (i + 1) % 10 == 0:
-                    print("Edge batch {}/{}".format(i+1, num_batches_val_loss))
 
                 # Negative mask
                 negative_mask = {}
@@ -202,7 +200,8 @@ def train_model(model,
                                    device=device,
                                    )
                 total_loss += val_loss.item()
-                # print(val_loss.item())
+                if (i + 1) % 10 == 0:
+                    print("Edge batch {}/{}: loss = {:.5f}".format(i + 1, num_batches_val_loss, val_loss.item()))
             val_avg_loss = total_loss / i
             model.val_loss_list.append(val_avg_loss)
 
