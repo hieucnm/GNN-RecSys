@@ -82,3 +82,4 @@ def save_everything(trained_model, graph, data, params, fixed_params, save_dir):
     data.item_id_df.to_csv(f'{save_dir}/item_id.csv', index=False)
     print("Graph & ID mapping saved!")
     print(f"Finish saving everything at {save_dir}")
+

@@ -102,6 +102,10 @@ class FixedParameters:
         # added by HieuCNM
         self.date_column = 'date'
         self.conv_column = 'converted'
+        self.use_recency = True
+        self.clicks_sample = 1.
+        self.converts_sample = 1.
+        self.norm = True
 
         # self.dropout = .5  # HP
         # self.norm = False  # HP
@@ -176,7 +180,6 @@ class DataLoader:
 def assign_graph_features(graph,
                           fixed_params,
                           data,
-                          **params,
                           ):
     """
     Assigns features to graph nodes and edges, based on data previously provided in the dataloader.
@@ -209,7 +212,7 @@ def assign_graph_features(graph,
     # add date as edge feature
     date_col = fixed_params.date_column
     conv_col = fixed_params.conv_column
-    if params['use_recency']:
+    if fixed_params.use_recency:
         df = data.user_item_train_grouped
         df['max_date'] = max(df[date_col])
         df['days_recency'] = (pd.to_datetime(df.max_date) - pd.to_datetime(df[date_col])).dt.days + 1

@@ -1,0 +1,15 @@
+
+ 
+ START - Hyper-parameters 
+'interaction_path': '/home/ubuntu/workspace/GNN-RecSys/examples/user_item_clicks.csv', 'user_feature_path': '/home/ubuntu/workspace/GNN-RecSys/examples/user_features.csv', 'result_dir': '/home/ubuntu/workspace/GNN-RecSys/examples/results', 'out_dim': 16, 'hidden_dim': 16, 'n_layers': 3, 'dropout': 0.1, 'pred': 'cos', 'delta': 0.05, 'lr': 0.001, 'weight_decay': 1e-05, 'num_epochs': 2, 'start_epoch': 0, 'patience': 1, 'neg_sample_size': 5, 'edge_batch_size': 16, 'num_workers': 4, 'check_embedding': False, 'duplicates': 'count_occurrence', 'days_of_converts': 365, 'days_of_clicks': 30, 'lifespan_of_items': 180, 'etype': [('user', 'converts', 'item'), ('user', 'clicks', 'item')], 'reverse_etype': {('user', 'converts', 'item'): ('item', 'converted-by', 'user'), ('user', 'clicks', 'item'): ('item', 'clicked-by', 'user')}, 'discern_clicks': True, 'uid_column': 'user_id', 'iid_column': 'item_id', 'k': 10, 'num_choices': 10, 'neighbor_sampler': 'full', 'explore': True, 'remove_false_negative': True, 'remove_train_eids': False, 'report_model_coverage': False, 'train_on_clicks': True, 'remove_on_inference': 0.7, 'run_inference': 1, 'subtrain_size': 0.05, 'valid_size': 0.05, 'node_batch_size': 128, 'optimizer': <class 'torch.optim.adam.Adam'>, 'date_column': 'date', 'conv_column': 'converted', 'use_recency': True, 'clicks_sample': 1.0, 'converts_sample': 1.0, 'norm': True, 'aggregator_type': 'mean', 'aggregator_hetero': 'mean' 
+
+Epoch 00000 | Training Loss 0.09387 | Validation Loss 0.07743 | 
+Epoch took 0:00:01.264254 
+
+Epoch 00001 || TRAINING Loss 0.07041 | Precision 1.875% | Recall 3.659% | Coverage 15.80% 
+                || VALIDATION Loss 0.05772 | Precision 0.311% | Recall 2.804% | Coverage 37.80% 
+Epoch took 0:00:14.397743 
+
+BEST VALIDATION Precision 0.311% | Recall 2.804% | Coverage 37.80%
+TEST Precision 0.500% | Recall 5.000% | Coverage 23.80%
+TEST Precision 0.266% | Recall 2.088% | Coverage 46.60%

@@ -1,0 +1,1 @@
+{"train_loss_list": [0.09387013587084683, 0.07040594085285315], "train_precision_list": [1.875], "train_recall_list": [3.6585365853658534], "train_coverage_list": [1.58], "val_loss_list": [0.07743307403646983, 0.05772107094526291], "val_precision_list": [0.31088082901554404], "val_recall_list": [2.803738317757009], "val_coverage_list": [3.7800000000000002]}
