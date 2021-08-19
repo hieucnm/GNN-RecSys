@@ -243,41 +243,46 @@ def assign_graph_features(graph,
     return graph
 
 
-def calculate_num_batches(train_eids_dict,
-                          valid_eids_dict,
-                          subtrain_uids,
-                          valid_uids,
-                          test_uids,
-                          all_iids,
+def calculate_num_batches(train_eid_dict,
+                          valid_eid_dict,
+                          sub_train_uid,
+                          valid_uid,
+                          test_uid,
+                          all_iid,
                           fixed_params):
-    train_eids_len = 0
-    valid_eids_len = 0
-    for etype in train_eids_dict.keys():
-        train_eids_len += len(train_eids_dict[etype])
-        valid_eids_len += len(valid_eids_dict[etype])
-    num_batches_train = math.ceil(train_eids_len / fixed_params.edge_batch_size)
-    num_batches_subtrain = math.ceil(
-        (len(subtrain_uids) + len(all_iids)) / fixed_params.node_batch_size
+    train_eid_len = 0
+    valid_eid_len = 0
+    for e_type in train_eid_dict.keys():
+        train_eid_len += len(train_eid_dict[e_type])
+        valid_eid_len += len(valid_eid_dict[e_type])
+    num_batches_train = math.ceil(train_eid_len / fixed_params.edge_batch_size)
+    num_batches_sub_train = math.ceil(
+        (len(sub_train_uid) + len(all_iid)) / fixed_params.node_batch_size
     )
-    num_batches_val_loss = math.ceil(valid_eids_len / fixed_params.edge_batch_size)
+    num_batches_val_loss = math.ceil(valid_eid_len / fixed_params.edge_batch_size)
     num_batches_val_metrics = math.ceil(
-        (len(valid_uids) + len(all_iids)) / fixed_params.node_batch_size
+        (len(valid_uid) + len(all_iid)) / fixed_params.node_batch_size
     )
     num_batches_test = math.ceil(
-        (len(test_uids) + len(all_iids)) / fixed_params.node_batch_size
+        (len(test_uid) + len(all_iid)) / fixed_params.node_batch_size
     )
-    return num_batches_train, num_batches_subtrain, num_batches_test, \
-           num_batches_val_loss, num_batches_val_metrics
+    return num_batches_train, num_batches_sub_train, num_batches_test, num_batches_val_loss, num_batches_val_metrics
 
 
-def summary_data_sets(train_eids_dict, valid_eids_dict, subtrain_uids, valid_uids, test_uids,
-                      all_iids, ground_truth_subtrain, ground_truth_valid, all_eids_dict):
-    print("train_eids_dict.keys:", train_eids_dict.keys())
-    print("valid_eids_dict.keys:", valid_eids_dict.keys())
-    print("subtrain_uids:", len(subtrain_uids))
-    print("valid_uids:", len(valid_uids))
-    print("test_uids:", len(test_uids))
-    print("all_iids:", len(all_iids))
-    print("ground_truth_subtrain:", len(ground_truth_subtrain))
-    print("ground_truth_valid:", len(ground_truth_valid))
-    print("all_eids_dict.keys:", all_eids_dict.keys())
+def summary_data_sets(train_eid_dict, valid_eid_dict, sub_train_uid, valid_uid, test_uid,
+                      all_iid, ground_truth_sub_train, ground_truth_valid, all_eid_dict):
+    print("train_eid.converts =", len(train_eid_dict[('user', 'converts', 'item')]))
+    print("train_eid.clicks   =", len(train_eid_dict[('user', 'clicks', 'item')]))
+    print("valid_eid.converts =", len(valid_eid_dict[('user', 'converts', 'item')]))
+    print("valid_eid.clicks   =", len(valid_eid_dict[('user', 'clicks', 'item')]))
+    print("all_eid.converts   =", len(all_eid_dict[('user', 'converts', 'item')]))
+    print("all_eid.clicks     =", len(all_eid_dict[('user', 'clicks', 'item')]))
+    print("sub_train_uid      =", len(sub_train_uid))
+    print("valid_uid          =", len(valid_uid))
+    print("test_uid           =", len(test_uid))
+    print("all_iid            =", len(all_iid))
+    print("ground_truth_sub_train.uid =", len(ground_truth_sub_train[0]))
+    print("ground_truth_sub_train.iid =", len(ground_truth_sub_train[1]))
+    print("ground_truth_valid.uid     =", len(ground_truth_valid[0]))
+    print("ground_truth_valid.iid     =", len(ground_truth_valid[1]))
+
