@@ -4,7 +4,6 @@ import time
 import numpy as np
 import torch
 from dgl import heterograph
-import dgl.multiprocessing as mp
 import datetime as dt
 import argparse
 from glob import glob
@@ -21,16 +20,17 @@ from src.evaluation import explore_recs, explore_sports, check_coverage
 from presplit import presplit_data
 from src.utils_data import FixedParameters
 
+# import dgl.multiprocessing as mp
+import torch.distributed as dist
+import torch.multiprocessing as mp
+
 from logging_config import get_logger
-
 log = get_logger(__name__)
-
-cuda = torch.cuda.is_available()
-device = torch.device('cuda') if cuda else torch.device('cpu')
 
 
 class TrainDataPaths:
-    def __init__(self, args):
+    def __init__(self):
+        global args
         timestamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
         self.full_interaction_path = args.interaction_path
         self.user_feat_path = args.user_feature_path
@@ -39,7 +39,9 @@ class TrainDataPaths:
         self.log_filepath = f'{self.result_dir}/running_log.txt'
 
 
-def main(args):
+# noinspection PyShadowingNames
+def setup():
+    global args
 
     fixed_params = FixedParameters(
         num_epochs=args.num_epochs,
@@ -51,7 +53,7 @@ def main(args):
 
     print('--> loading data ...')
     start_time = time.time()
-    train_data_paths = TrainDataPaths(args)
+    train_data_paths = TrainDataPaths()
     full_interaction_data = read_data(train_data_paths.full_interaction_path)
     train_df, test_df = presplit_data(full_interaction_data,
                                       uid_column=fixed_params.uid_column,
@@ -128,127 +130,133 @@ def main(args):
                 'out': args.out_dim,
                 'hidden': args.hidden_dim}
 
-    def run(proc_id, devices):
-        # Initialize distributed training context.
-        dev_id = devices[proc_id]
-        dist_init_method = 'tcp://10.50.9.13:{port}'.format(port='12345')
-        if torch.cuda.device_count() < 1:
-            device = torch.device('cpu')
-            torch.distributed.init_process_group(
-                backend='gloo', init_method=dist_init_method, world_size=len(devices), rank=proc_id)
-        else:
-            torch.cuda.set_device(dev_id)
-            device = torch.device('cuda:' + str(dev_id))
-            torch.distributed.init_process_group(
-                backend='nccl', init_method=dist_init_method, world_size=len(devices), rank=proc_id)
+    return (valid_graph, train_graph, train_eid_dict, valid_eid_dict, all_eid_dict,
+            sub_train_uid, valid_uid, test_uid, all_iid,
+            fixed_params, dim_dict, train_data_paths, data,
+            num_batches_train, num_batches_val_loss, ground_truth_sub_train, ground_truth_valid)
 
-        (
-            edge_loader_train,
-            edge_loader_valid,
-            node_loader_sub_train,
-            node_loader_valid,
-            _
-        ) = generate_dataloaders(valid_graph,
-                                 train_graph,
-                                 train_eid_dict,
-                                 valid_eid_dict,
-                                 sub_train_uid,
-                                 valid_uid,
-                                 test_uid,
-                                 all_iid,
-                                 fixed_params,
-                                 num_workers=args.num_workers if not cuda else 0,
-                                 n_layers=args.n_layers,
-                                 neg_sample_size=args.neg_sample_size,
-                                 device=device,
-                                 use_ddp=args.use_ddp
-                                 )
 
-        model = ConvModel(valid_graph,
-                          args.n_layers,
-                          dim_dict,
-                          fixed_params.norm,
-                          args.dropout,
-                          fixed_params.aggregator_type,
-                          fixed_params.pred,
-                          fixed_params.aggregator_hetero
-                          )
-        # Wrap the model with distributed data parallel module.
-        if device == torch.device('cpu'):
-            model = torch.nn.parallel.DistributedDataParallel(model, device_ids=None, output_device=None)
-        else:
-            model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[device], output_device=device)
+def train(device, params):
 
-        # Train
-        hp_sentence = vars(args)
-        hp_sentence.update(vars(fixed_params))
-        hp_sentence = f'{str(hp_sentence)[1: -1]} \n'
-        save_txt(f'\n \n START - Hyper-parameters \n{hp_sentence}', train_data_paths.log_filepath, "a")
-        print('->> training ...')
-        trained_model, viz, best_metrics = train_model(
-            model,
-            train_graph=train_graph,
-            valid_graph=valid_graph,
-            edgeloader_train=edge_loader_train,
-            edgeloader_valid=edge_loader_valid,
-            nodeloader_valid=node_loader_valid,
-            nodeloader_subtrain=node_loader_sub_train,
-            num_batches_train=num_batches_train,
-            num_batches_val_loss=num_batches_val_loss,
-            ground_truth_subtrain=ground_truth_sub_train,
-            ground_truth_valid=ground_truth_valid,
-            bought_eids=train_eid_dict[('user', 'converts', 'item')],
-            remove_already_bought=True,
-            get_metrics=True,
-            loss_fn=max_margin_loss,
-            device=device,
-            lr=args.lr,
-            pred=args.pred,
-            delta=args.delta,
-            out_dim=args.out_dim,
-            patience=args.patience,
-            num_epochs=args.num_epochs,
-            start_epoch=args.start_epoch,
-            neg_sample_size=args.neg_sample_size,
-            k=fixed_params.k,
-            optimizer=fixed_params.optimizer,
-            use_recency=fixed_params.use_recency,
-            result_filepath=train_data_paths.log_filepath,
-            remove_false_negative=fixed_params.remove_false_negative,
-            save_dir=train_data_paths.result_dir,
-            proc_id=proc_id
-        )
+    data, args = params
+    (
+        valid_graph,
+        train_graph,
+        train_eid_dict,
+        valid_eid_dict,
+        all_eid_dict,
+        sub_train_uid,
+        valid_uid,
+        test_uid,
+        all_iid,
+        fixed_params,
+        dim_dict,
+        train_data_paths,
+        data,
+        num_batches_train,
+        num_batches_val_loss,
+        ground_truth_sub_train,
+        ground_truth_valid
+    ) = data
 
-        # Save everything
-        save_everything(valid_graph, data, args, fixed_params, hp_sentence, viz, save_dir=train_data_paths.result_dir)
+    (
+        edge_loader_train,
+        edge_loader_valid,
+        node_loader_sub_train,
+        node_loader_valid,
+        _
+    ) = generate_dataloaders(valid_graph,
+                             train_graph,
+                             train_eid_dict,
+                             valid_eid_dict,
+                             sub_train_uid,
+                             valid_uid,
+                             test_uid,
+                             all_iid,
+                             fixed_params,
+                             num_workers=0,
+                             n_layers=args.n_layers,
+                             neg_sample_size=args.neg_sample_size,
+                             device=device,
+                             use_ddp=True
+                             )
 
-        # Report performance on validation set
-        print('--> training finshed! Report metrics:')
-        sentence = ("BEST VALIDATION: Precision "
-                    "{:.3f}% | Recall {:.3f}% | Coverage {:.2f}%"
-                    .format(best_metrics['precision'] * 100,
-                            best_metrics['recall'] * 100,
-                            best_metrics['coverage'] * 100))
-        log.info(sentence)
-        save_txt(sentence, train_data_paths.log_filepath, mode='a')
-        pass
+    model = ConvModel(valid_graph,
+                      args.n_layers,
+                      dim_dict,
+                      fixed_params.norm,
+                      args.dropout,
+                      fixed_params.aggregator_type,
+                      fixed_params.pred,
+                      fixed_params.aggregator_hetero
+                      ).to(device)
+    # Wrap the model with distributed data parallel module.
+    if device == torch.device('cpu'):
+        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=None, output_device=None)
+    else:
+        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[device], output_device=device)
 
-    # Use DDP to train
-    valid_graph.create_formats_()
-    num_gpus = torch.cuda.device_count()
-    devices = list(range(num_gpus))
-    procs = []
-    for proc_id in range(num_gpus):
-        p = mp.Process(target=run, args=(proc_id, devices))
-        p.start()
-        procs.append(p)
-    for p in procs:
-        p.join()
+    # Train
+    hp_sentence = vars(args)
+    hp_sentence.update(vars(fixed_params))
+    hp_sentence = f'{str(hp_sentence)[1: -1]} \n'
+    save_txt(f'\n \n START - Hyper-parameters \n{hp_sentence}', train_data_paths.log_filepath, "a")
+    print('->> training ...')
+    trained_model, viz, best_metrics = train_model(
+        model,
+        train_graph=train_graph,
+        valid_graph=valid_graph,
+        edgeloader_train=edge_loader_train,
+        edgeloader_valid=edge_loader_valid,
+        nodeloader_valid=node_loader_valid,
+        nodeloader_subtrain=node_loader_sub_train,
+        num_batches_train=num_batches_train,
+        num_batches_val_loss=num_batches_val_loss,
+        ground_truth_subtrain=ground_truth_sub_train,
+        ground_truth_valid=ground_truth_valid,
+        bought_eids=train_eid_dict[('user', 'converts', 'item')],
+        remove_already_bought=True,
+        get_metrics=True,
+        loss_fn=max_margin_loss,
+        device=device,
+        lr=args.lr,
+        pred=args.pred,
+        delta=args.delta,
+        out_dim=args.out_dim,
+        patience=args.patience,
+        num_epochs=args.num_epochs,
+        start_epoch=args.start_epoch,
+        neg_sample_size=args.neg_sample_size,
+        k=fixed_params.k,
+        optimizer=fixed_params.optimizer,
+        use_recency=fixed_params.use_recency,
+        result_filepath=train_data_paths.log_filepath,
+        remove_false_negative=fixed_params.remove_false_negative,
+        save_dir=train_data_paths.result_dir,
+        gpu_id=0 if device.type == 'cpu' else device.index
+    )
 
+    # Save everything
+    save_everything(valid_graph, data, args, fixed_params, hp_sentence, viz,
+                    save_dir=train_data_paths.result_dir)
+
+    # Report performance on validation set
+    print('--> training finshed! Report metrics:')
+    sentence = ("BEST VALIDATION: Precision "
+                "{:.3f}% | Recall {:.3f}% | Coverage {:.2f}%"
+                .format(best_metrics['precision'] * 100,
+                        best_metrics['recall'] * 100,
+                        best_metrics['coverage'] * 100))
+    log.info(sentence)
+    save_txt(sentence, train_data_paths.log_filepath, mode='a')
+
+
+def test():
     # Report performance on test set
     log.debug('--> testing ...')
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     node_loader_test = generate_test_loaders(train_graph, test_uid, all_iid, fixed_params,
-                                             num_workers=args.num_workers if not cuda else 0,
+                                             num_workers=0,
                                              n_layers=args.n_layers)
     model = ConvModel(valid_graph,
                       args.n_layers,
@@ -285,41 +293,73 @@ def main(args):
             save_txt(sentence, train_data_paths.log_filepath, mode='a')
 
 
-parser = argparse.ArgumentParser("Graph Learning")
-parser.add_argument('-ip', '--interaction-path', type=str,
-                    default='/home/ubuntu/workspace/GNN-RecSys/examples/user_item_clicks.parquet',
-                    help='Path to load the historical interactions of user-item to build the graph.')
-parser.add_argument('-up', '--user-feature-path', type=str,
-                    default='/home/ubuntu/workspace/GNN-RecSys/examples/user_features.csv',
-                    help='Path to load the features to assign to users in the graph.')
-parser.add_argument('-rp', '--result-dir', type=str,
-                    default='/home/ubuntu/workspace/GNN-RecSys/examples/results',
-                    help='Directory to save everything.')
-parser.add_argument('--out-dim', type=int, default=16, help='Output dimension')
-parser.add_argument('--hidden-dim', type=int, default=16, help='Hidden dimension')
-parser.add_argument('--n-layers', type=int, default=3, help='Number of layers')
-parser.add_argument('--dropout', type=float, default=0.1, help='Dropout ratio')
-parser.add_argument('--pred', type=str, default='cos', choices=['nn', 'cos'], help='Way to predict scores of link')
-parser.add_argument('--delta', type=float, default=0.05, help='Margin used in maximal margin loss')
+def init_process(pid, num_pid, fn, fn_params=None):
+    dist_init_method = 'tcp://{ip}:{port}'.format(ip='10.50.9.13', port=12345)
+    if torch.cuda.is_available():
+        backend = 'nccl'
+        device = torch.device(f'cuda:{pid}')
+        torch.cuda.set_device(pid)
+    else:
+        backend = 'gloo'
+        device = torch.device('cpu')
+    dist.init_process_group(backend, init_method=dist_init_method, rank=pid, world_size=num_pid)
 
-parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
-parser.add_argument('--weight-decay', type=float, default=1e-5, help='Weight decay in SGD')
-parser.add_argument('--num-epochs', type=int, default=2, help='Number of epochs')
-parser.add_argument('--start_epoch', type=int, default=0, help='Starting from this epoch')
-parser.add_argument('--patience', type=int, default=1, help='Number of iteration to wait for early stopping')
-parser.add_argument('--neg-sample-size', type=int, default=5, help='Number of samples when doing negative sampling')
-parser.add_argument('--edge-batch-size', default=16, help='Number of edges in a train / validation batch')
-parser.add_argument('--num-workers', type=int, default=4, help='Number of cores of CPU to use')
-parser.add_argument('--check-embedding', action='store_true', default=False, help='Explore embedding result')
-parser.add_argument('--duplicates', type=str, default='count_occurrence',
-                    choices=['count_occurrence', 'keep_all', 'keep_last'],
-                    help='Way to handle duplicate interactions')
+    # Run
+    fn(device, fn_params)
 
-parser.add_argument('--use-ddp', action='store_true', default=False, help='Use DistributedDataParallel')
+
+def parse_args():
+    parser = argparse.ArgumentParser("Graph Learning")
+    parser.add_argument('-ip', '--interaction-path', type=str,
+                        default='/home/ubuntu/workspace/GNN-RecSys/examples/user_item_clicks.parquet',
+                        help='Path to load the historical interactions of user-item to build the graph.')
+    parser.add_argument('-up', '--user-feature-path', type=str,
+                        default='/home/ubuntu/workspace/GNN-RecSys/examples/user_features.csv',
+                        help='Path to load the features to assign to users in the graph.')
+    parser.add_argument('-rp', '--result-dir', type=str,
+                        default='/home/ubuntu/workspace/GNN-RecSys/examples/results',
+                        help='Directory to save everything.')
+    parser.add_argument('--out-dim', type=int, default=16, help='Output dimension')
+    parser.add_argument('--hidden-dim', type=int, default=16, help='Hidden dimension')
+    parser.add_argument('--n-layers', type=int, default=3, help='Number of layers')
+    parser.add_argument('--dropout', type=float, default=0.1, help='Dropout ratio')
+    parser.add_argument('--pred', type=str, default='cos', choices=['nn', 'cos'], help='Way to predict scores of link')
+    parser.add_argument('--delta', type=float, default=0.05, help='Margin used in maximal margin loss')
+
+    parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
+    parser.add_argument('--weight-decay', type=float, default=1e-5, help='Weight decay in SGD')
+    parser.add_argument('--num-epochs', type=int, default=2, help='Number of epochs')
+    parser.add_argument('--start_epoch', type=int, default=0, help='Starting from this epoch')
+    parser.add_argument('--patience', type=int, default=1, help='Number of iteration to wait for early stopping')
+    parser.add_argument('--neg-sample-size', type=int, default=5, help='Number of samples when doing negative sampling')
+    parser.add_argument('--edge-batch-size', default=16, help='Number of edges in a train / validation batch')
+    parser.add_argument('--num-workers', type=int, default=4, help='Number of cores of CPU to use')
+    parser.add_argument('--check-embedding', action='store_true', default=False, help='Explore embedding result')
+    parser.add_argument('--duplicates', type=str, default='count_occurrence',
+                        choices=['count_occurrence', 'keep_all', 'keep_last'],
+                        help='Way to handle duplicate interactions')
+
+    parser.add_argument('--use-ddp', action='store_true', default=True, help='Use DistributedDataParallel')
+    return parser.parse_args()
 
 
 if __name__ == '__main__':
-    print(f"Using device: {device.type}")
-    args = parser.parse_args()
-    print(args)
-    main(args)
+    args = parse_args()
+    print("args: ", vars(args))
+
+    training_data = setup()
+    valid_graph = training_data[0]
+    valid_graph.create_formats_()
+
+    num_gpus = torch.cuda.device_count()
+    print(f'--> using {num_gpus} GPUs')
+
+    processes = []
+    mp.set_start_method("spawn")
+    for gpu_id in range(num_gpus):
+        p = mp.Process(target=init_process, args=(gpu_id, num_gpus, train, (training_data, args)))
+        p.start()
+        processes.append(p)
+
+    for p in processes:
+        p.join()

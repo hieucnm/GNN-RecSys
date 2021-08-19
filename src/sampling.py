@@ -1,5 +1,6 @@
 import dgl
 import numpy as np
+import torch
 
 
 def train_valid_split(valid_graph: dgl.DGLHeteroGraph,
@@ -181,7 +182,8 @@ def generate_dataloaders(valid_graph,
 
     if params['use_ddp']:
         edge_param_train.update({
-            'device': params['device'],
+            # 'pin_memory': False,
+            'device': torch.device('cpu'),
             'use_ddp': params['use_ddp']
         })
 
