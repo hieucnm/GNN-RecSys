@@ -37,10 +37,12 @@ def plot_train_loss(hp_sentence, viz, save_dir):
         plt.plot(x, viz['train_precision_list'])
         plt.plot(x, viz['train_recall_list'])
         plt.plot(x, viz['train_coverage_list'])
+        plt.plot(x, viz['train_auc_list'])
         plt.plot(x, viz['val_precision_list'])
         plt.plot(x, viz['val_recall_list'])
         plt.plot(x, viz['val_coverage_list'])
-        plt.legend(['training precision', 'training recall', 'training coverage/10',
-                    'valid precision', 'valid recall', 'valid coverage/10'], loc='upper left')
+        plt.plot(x, viz['val_auc_list'])
+        plt.legend(['train precision', 'train recall', 'train coverage/10', 'train auc',
+                    'valid precision', 'valid recall', 'valid coverage/10', 'valid_auc'], loc='upper left')
         plt.savefig(f'{save_dir}/metrics.png')
         plt.close(fig)

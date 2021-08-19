@@ -74,10 +74,12 @@ def train_model(model,
     model.train_precision_list = []
     model.train_recall_list = []
     model.train_coverage_list = []
+    model.train_auc_list = []
     model.val_loss_list = []
     model.val_precision_list = []
     model.val_recall_list = []
     model.val_coverage_list = []
+    model.val_auc_list = []
     best_metrics = {}  # For visualization
     max_metric = -0.1
     patience_counter = 0  # For early stopping
@@ -217,63 +219,44 @@ def train_model(model,
             model.eval()
             with torch.no_grad():
                 print(f'--> Epoch {epoch}/{num_epochs} : calculating training metrics ...')
-                y = get_embeddings(train_graph,
-                                   out_dim,
-                                   model,
-                                   nodeloader_subtrain,
-                                   device
-                                   )
+                y = get_embeddings(train_graph, out_dim, model, nodeloader_subtrain, device)
 
-                train_precision, train_recall, train_coverage = get_metrics_at_k(y,
-                                                                                 train_graph,
-                                                                                 model,
-                                                                                 out_dim,
-                                                                                 ground_truth_subtrain,
-                                                                                 bought_eids,
-                                                                                 k,
-                                                                                 True,  # Remove already bought
-                                                                                 device,
-                                                                                 pred)
+                train_precision, train_recall, train_coverage, train_auc = get_metrics_at_k(
+                    y, train_graph, model, out_dim, ground_truth_subtrain, bought_eids, k, True, device, pred)
 
                 # validation metrics
                 print(f'--> Epoch {epoch}/{num_epochs} : calculating validation metrics ...')
-                y = get_embeddings(valid_graph,
-                                   out_dim,
-                                   model,
-                                   nodeloader_valid,
-                                   device,
-                                   )
+                y = get_embeddings(valid_graph, out_dim, model, nodeloader_valid, device)
 
-                val_precision, val_recall, val_coverage = get_metrics_at_k(y,
-                                                                           valid_graph,
-                                                                           model,
-                                                                           out_dim,
-                                                                           ground_truth_valid,
-                                                                           bought_eids,
-                                                                           k,
-                                                                           remove_already_bought,
-                                                                           device,
-                                                                           pred)
+                val_precision, val_recall, val_coverage, val_auc = get_metrics_at_k(
+                    y, valid_graph, model, out_dim, ground_truth_valid, bought_eids, k, remove_already_bought,
+                    device, pred
+                )
                 sentence = '''--> Finish epoch {:02d}/{:02d} 
-                || Training Loss {:.5f} | Precision {:.3f}% | Recall {:.3f}% | Coverage {:.2f}% 
-                || Validation Loss {:.5f} | Precision {:.3f}% | Recall {:.3f}% | Coverage {:.2f}% '''.format(
+                || Training Loss {:.5f} | Precision {:.3f}% | Recall {:.3f}% | Coverage {:.2f} | AUC {:.2f}% 
+                || Validation Loss {:.5f} | Precision {:.3f}% | Recall {:.3f}% | Coverage {:.2f}% | AUC {:.2f}% '''\
+                    .format(
                     epoch, num_epochs,
-                    train_avg_loss, train_precision * 100, train_recall * 100, train_coverage * 100,
-                    val_avg_loss, val_precision * 100, val_recall * 100, val_coverage * 100)
+                    train_avg_loss, train_precision * 100, train_recall * 100, train_coverage * 100, train_auc * 100,
+                    val_avg_loss, val_precision * 100, val_recall * 100, val_coverage * 100, val_auc * 100
+                )
                 print(sentence)
                 save_txt(sentence, result_filepath, mode='a')
 
                 model.train_precision_list.append(train_precision * 100)
                 model.train_recall_list.append(train_recall * 100)
                 model.train_coverage_list.append(train_coverage * 10)
+                model.train_auc_list.append(train_auc * 100)
                 model.val_precision_list.append(val_precision * 100)
                 model.val_recall_list.append(val_recall * 100)
                 model.val_coverage_list.append(val_coverage * 10)  # just *10 for viz purposes
+                model.val_auc_list.append(val_auc * 100)  # just *10 for viz purposes
 
                 # Visualization of best metric
                 if val_recall > max_metric:
                     max_metric = val_recall
-                    best_metrics = {'recall': val_recall, 'precision': val_precision, 'coverage': val_coverage}
+                    best_metrics = {'recall': val_recall, 'precision': val_precision,
+                                    'coverage': val_coverage, 'auc': val_auc}
 
         else:
             sentence = "--> Finish epoch {:02d}/{:02d} | Training Loss {:.5f} | Validation Loss {:.5f} | ".format(
@@ -303,10 +286,12 @@ def train_model(model,
            'train_precision_list': model.train_precision_list,
            'train_recall_list': model.train_recall_list,
            'train_coverage_list': model.train_coverage_list,
+           'train_auc_list': model.train_auc_list,
            'val_loss_list': model.val_loss_list,
            'val_precision_list': model.val_precision_list,
            'val_recall_list': model.val_recall_list,
-           'val_coverage_list': model.val_coverage_list}
+           'val_coverage_list': model.val_coverage_list,
+           'val_auc_list': model.val_auc_list}
 
     print('Training completed.')
     return model, viz, best_metrics  # model will already be to 'cuda' device?

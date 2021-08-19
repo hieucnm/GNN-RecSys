@@ -270,7 +270,7 @@ def test():
         embeddings = get_embeddings(valid_graph, args.out_dim, model, node_loader_test, device)
 
         for ground_truth in [data.ground_truth_convert_test, data.ground_truth_test]:
-            precision, recall, coverage = get_metrics_at_k(embeddings,
+            precision, recall, coverage, auc = get_metrics_at_k(embeddings,
                                                            valid_graph,
                                                            model,
                                                            args.out_dim,

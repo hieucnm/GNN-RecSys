@@ -4,6 +4,8 @@ from collections import defaultdict
 import numpy as np
 import torch
 import torch.nn as nn
+from sklearn.metrics import roc_auc_score
+
 
 def create_ground_truth(users, items):
     """
@@ -49,6 +51,7 @@ def get_recs(g,
         model = model.to(device)
     print('Computing recommendations on {} users, for {} items'.format(len(user_ids), g.num_nodes('item')))
     recs = {}
+    similarities = {}
     for user in user_ids:
         user_emb = h['user'][user]
         already_bought = already_bought_dict[user]
@@ -75,10 +78,11 @@ def get_recs(g,
             order = [item for item in order if item not in already_bought]
         rec = order[:k]
         recs[user] = rec
-    return recs
+        similarities[user] = ratings_formatted
+    return recs, similarities
 
 
-def recs_to_metrics(recs, ground_truth_dict, g):
+def recs_to_metrics(recs, similarities, ground_truth_dict, g):
     """
     Given the recommendations and the ground_truth, computes precision, recall & coverage.
     """
@@ -103,8 +107,15 @@ def recs_to_metrics(recs, ground_truth_dict, g):
     recs_flatten = [item for sublist in list(recs.values()) for item in sublist]
     nb_recommended = len(set(recs_flatten))
     coverage = nb_recommended / nb_total
-    
-    return precision, recall, coverage
+
+    # auc
+    y_true = []
+    y_score = []
+    for uid, scores in similarities.items():
+        y_score.extend(scores)
+        y_true.extend([int(iid in ground_truth_dict[uid]) for iid in range(nb_total)])
+    auc = roc_auc_score(y_true=y_true, y_score=y_score)
+    return precision, recall, coverage, auc
 
 
 def get_metrics_at_k(h, 
@@ -126,11 +137,11 @@ def get_metrics_at_k(h,
     users, items = ground_truth
     user_ids = np.unique(users).tolist()
     ground_truth_dict = create_ground_truth(users, items)
-    recs = get_recs(g, h, model, embed_dim, k, user_ids, already_bought_dict,
-                    remove_already_bought, device, pred, use_popularity, weight_popularity)
-    precision, recall, coverage = recs_to_metrics(recs, ground_truth_dict, g)
+    recs, similarities = get_recs(g, h, model, embed_dim, k, user_ids, already_bought_dict,
+                                  remove_already_bought, device, pred, use_popularity, weight_popularity)
+    precision, recall, coverage, auc = recs_to_metrics(recs, similarities, ground_truth_dict, g)
     
-    return precision, recall, coverage
+    return precision, recall, coverage, auc
 
 
 def MRR_neg_edges(model,

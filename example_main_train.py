@@ -1,34 +1,30 @@
 import os
 import time
-
-import numpy as np
 import torch
-from dgl import heterograph
-import datetime as dt
 import argparse
+import warnings
+import datetime as dt
+from dgl import heterograph
 
 from src.utils_data import DataLoader, assign_graph_features, summary_data_sets, calculate_num_batches
 from src.utils import read_data, save_txt, save_everything
 from src.model import ConvModel, max_margin_loss
 from src.sampling import train_valid_split, generate_dataloaders
 from src.train.run import train_model, get_embeddings
-from src.utils_vizualization import plot_train_loss
-from src.metrics import (create_already_bought, create_ground_truth,
-                         get_metrics_at_k, get_recs)
-from src.evaluation import explore_recs, explore_sports, check_coverage
+from src.metrics import (get_metrics_at_k)
 from presplit import presplit_data
 from src.utils_data import FixedParameters
-
 from logging_config import get_logger
 
+warnings.filterwarnings('ignore')
 log = get_logger(__name__)
-
 cuda = torch.cuda.is_available()
 device = torch.device('cuda') if cuda else torch.device('cpu')
 
 
 class TrainDataPaths:
-    def __init__(self, args):
+    def __init__(self):
+        global args
         timestamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
         self.full_interaction_path = args.interaction_path
         self.user_feat_path = args.user_feature_path
@@ -38,12 +34,11 @@ class TrainDataPaths:
 
 
 def main(args):
-
     fixed_params = FixedParameters(args)
 
     print('--> loading data ...')
     start_time = time.time()
-    train_data_paths = TrainDataPaths(args)
+    train_data_paths = TrainDataPaths()
     full_interaction_data = read_data(train_data_paths.full_interaction_path)
     train_df, test_df = presplit_data(full_interaction_data,
                                       uid_column=fixed_params.uid_column,
@@ -221,33 +216,34 @@ def main(args):
         embeddings = get_embeddings(valid_graph, args.out_dim, model, node_loader_test, device)
 
         for ground_truth in [data.ground_truth_convert_test, data.ground_truth_test]:
-            precision, recall, coverage = get_metrics_at_k(embeddings,
-                                                           valid_graph,
-                                                           model,
-                                                           args.out_dim,
-                                                           ground_truth,
-                                                           all_eid_dict[('user', 'converts', 'item')],
-                                                           fixed_params.k,
-                                                           False,  # Remove already bought
-                                                           device,
-                                                           args.pred)
-            sentence = ("TEST Precision {:.3f}% | Recall {:.3f}% | Coverage {:.2f}%"
+            precision, recall, coverage, auc = get_metrics_at_k(embeddings,
+                                                                valid_graph,
+                                                                model,
+                                                                args.out_dim,
+                                                                ground_truth,
+                                                                all_eid_dict[('user', 'converts', 'item')],
+                                                                fixed_params.k,
+                                                                False,  # Remove already bought
+                                                                device,
+                                                                args.pred)
+            sentence = ("TEST Precision {:.3f}% | Recall {:.3f}% | Coverage {:.2f}% | AUC {:.2f}%"
                         .format(precision * 100,
                                 recall * 100,
-                                coverage * 100))
+                                coverage * 100,
+                                auc * 100))
             log.info(sentence)
             save_txt(sentence, train_data_paths.log_filepath, mode='a')
 
 
 parser = argparse.ArgumentParser("Graph Learning")
 parser.add_argument('-ip', '--interaction-path', type=str,
-                    default='/home/ubuntu/workspace/GNN-RecSys/examples/user_item_clicks.parquet',
+                    default='examples/user_item_clicks.parquet',
                     help='Path to load the historical interactions of user-item to build the graph.')
 parser.add_argument('-up', '--user-feature-path', type=str,
-                    default='/home/ubuntu/workspace/GNN-RecSys/examples/user_features.csv',
+                    default='examples/user_features.csv',
                     help='Path to load the features to assign to users in the graph.')
 parser.add_argument('-rp', '--result-dir', type=str,
-                    default='/home/ubuntu/workspace/GNN-RecSys/examples/results',
+                    default='examples/results',
                     help='Directory to save everything.')
 parser.add_argument('--out-dim', type=int, default=64, help='Output dimension')
 parser.add_argument('--hidden-dim', type=int, default=32, help='Hidden dimension')
@@ -262,17 +258,15 @@ parser.add_argument('--num-epochs', type=int, default=3, help='Number of epochs'
 parser.add_argument('--start_epoch', type=int, default=0, help='Starting from this epoch')
 parser.add_argument('--patience', type=int, default=1, help='Number of iteration to wait for early stopping')
 parser.add_argument('--neg-sample-size', type=int, default=3, help='Number of samples when doing negative sampling')
-parser.add_argument('--edge-batch-size', default=4096, help='Number of edges in a train / validation batch')
-parser.add_argument('--node-batch-size', default=2048, help='Number of nodes in a train / validation batch')
-parser.add_argument('--precision-at-k', default=5, help='Precision/Recall at this number will be computed')
+parser.add_argument('--edge-batch-size', type=int, default=4096, help='Number of edges in a train / validation batch')
+parser.add_argument('--node-batch-size', type=int, default=2048, help='Number of nodes in a train / validation batch')
+parser.add_argument('--precision-at-k', type=int, default=5, help='Precision/Recall at this number will be computed')
 parser.add_argument('--num-workers', type=int, default=8, help='Number of cores of CPU to use')
 parser.add_argument('--check-embedding', action='store_true', default=False, help='Explore embedding result')
 parser.add_argument('--duplicates', type=str, default='count_occurrence',
                     choices=['count_occurrence', 'keep_all', 'keep_last'],
                     help='Way to handle duplicate interactions')
-
 parser.add_argument('--use-ddp', action='store_true', default=False, help='Use DistributedDataParallel')
-
 
 if __name__ == '__main__':
     print(f"Using device: {device.type}")
