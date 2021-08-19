@@ -179,7 +179,7 @@ def generate_dataloaders(valid_graph,
         'num_workers': num_workers,
     }
 
-    if params['device'].type != 'cpu':
+    if params['use_ddp']:
         edge_param_train.update({
             'device': params['device'],
             'use_ddp': params['use_ddp']
@@ -201,12 +201,13 @@ def generate_dataloaders(valid_graph,
     edge_param_valid = edge_param_train.copy()
     edge_param_valid.pop("exclude", None)
     edge_param_valid.pop("reverse_etypes", None)
-    edge_param_valid.pop("g_sampling", None)
-    edge_param_train.update({'g_sampling': train_graph})
-    edge_param_valid['eids'] = valid_eids_dict
-    edge_param_valid['shuffle'] = False
-    if 'use_ddp' in edge_param_valid:
-        edge_param_valid['use_ddp'] = False
+    edge_param_valid.pop('use_ddp', None)
+    edge_param_valid.pop('device', None)
+    edge_param_train.update({
+        'g_sampling': train_graph,
+        'eids': valid_eids_dict,
+        'shuffle': False
+    })
     edge_loader_valid = dgl.dataloading.EdgeDataLoader(**edge_param_valid)
 
     node_param_train = {
@@ -217,7 +218,7 @@ def generate_dataloaders(valid_graph,
         'drop_last': False,
         'num_workers': num_workers,
     }
-    if params['device'].type != 'cpu':
+    if params['use_ddp']:
         node_param_train.update({
             'device': params['device'],
             'use_ddp': params['use_ddp']
@@ -228,15 +229,17 @@ def generate_dataloaders(valid_graph,
 
     # Valid node loader
     node_param_valid = node_param_train.copy()
-    node_param_valid['nids'] = {'user': valid_uids, 'item': all_iids}
-    node_param_valid['shuffle'] = False
-    if 'use_ddp' in node_param_valid:
-        node_param_valid['use_ddp'] = False
+    node_param_valid.pop('use_ddp', None)
+    node_param_valid.pop('device', None)
+    node_param_valid.update({
+        'nids': {'user': valid_uids, 'item': all_iids},
+        'shuffle': False
+    })
     node_loader_valid = dgl.dataloading.NodeDataLoader(**node_param_valid)
 
     # Test node loader
     node_param_test = node_param_valid.copy()
-    node_param_test['nids'] = {'user': test_uids, 'item': all_iids}
+    node_param_test.update({'nids': {'user': test_uids, 'item': all_iids}})
     node_loader_test = dgl.dataloading.NodeDataLoader(**node_param_test)
 
     return edge_loader_train, edge_loader_valid, node_loader_sub_train, node_loader_valid, node_loader_test
