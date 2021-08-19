@@ -203,7 +203,8 @@ def main(args):
         use_recency=fixed_params.use_recency,
         result_filepath=train_data_paths.log_filepath,
         remove_false_negative=fixed_params.remove_false_negative,
-        save_dir=train_data_paths.result_dir
+        save_dir=train_data_paths.result_dir,
+        use_ddp=args.use_ddp
     )
 
     # Save everything
