@@ -48,7 +48,8 @@ def train_model(model,
                 patience=5,
                 pred=None,
                 remove_false_negative=False,
-                proc_id=0
+                gpu_id=0,
+                use_ddp=False
                 ):
     """
     Main function to train a GNN, using max margin loss on positive and negative examples.
@@ -87,7 +88,8 @@ def train_model(model,
     # TRAINING
     for epoch in range(start_epoch, num_epochs):
 
-        edgeloader_train.set_epoch(epoch)  # <--- necessary for data_loader with DDP.
+        if use_ddp:
+            edgeloader_train.set_epoch(epoch)  # <--- necessary for data_loader with DDP.
 
         start_time = time.time()
         model.train()  # Because if not, after eval, dropout would be still be inactive
@@ -141,7 +143,7 @@ def train_model(model,
                            )
             if (i + 1) % 10 == 0:
                 print("Epoch {}/{} - Batch {}/{}: loss = {:.5f}".format(
-                    epoch, num_epochs, i + 1, num_batches_train, loss.item() / len(blocks)))
+                    epoch, num_epochs, i + 1, num_batches_train, loss.item()))
 
             if epoch > 0:  # For the epoch 0, no training (just report loss)
                 loss.backward()
@@ -154,7 +156,7 @@ def train_model(model,
         train_avg_loss = total_loss / (i + 1)
         model.train_loss_list.append(train_avg_loss)
 
-        if proc_id > 0:
+        if gpu_id > 0:
             continue
         print(f'--> Epoch {epoch}/{num_epochs} : validating ...')
         model.eval()
@@ -205,7 +207,7 @@ def train_model(model,
                 total_loss += val_loss.item()
                 if (i + 1) % 10 == 0:
                     print("Epoch {}/{} - Batch {}/{}: loss = {:.5f}".format(
-                        epoch, num_epochs, i + 1, num_batches_val_loss, val_loss.item() / len(blocks)))
+                        epoch, num_epochs, i + 1, num_batches_val_loss, val_loss.item()))
             val_avg_loss = total_loss / (i + 1)
             model.val_loss_list.append(val_avg_loss)
 
