@@ -19,7 +19,7 @@ def plot_train_loss(hp_sentence, viz, save_dir):
     if 'val_loss_list' in viz.keys():
         fig = plt.figure()
         x = np.arange(len(viz['train_loss_list']))
-        plt.title('\n'.join(textwrap.wrap(hp_sentence, 60)))
+        plt.title('Losses')
         fig.tight_layout()
         plt.rcParams["axes.titlesize"] = 6
         plt.plot(x, viz['train_loss_list'])
@@ -31,7 +31,7 @@ def plot_train_loss(hp_sentence, viz, save_dir):
     if 'val_recall_list' in viz.keys():
         fig = plt.figure()
         x = np.arange(len(viz['train_precision_list']))
-        plt.title('\n'.join(textwrap.wrap(hp_sentence, 60)))
+        plt.title('Metrics')
         fig.tight_layout()
         plt.rcParams["axes.titlesize"] = 6
         plt.plot(x, viz['train_precision_list'])

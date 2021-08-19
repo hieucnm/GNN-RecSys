@@ -43,13 +43,7 @@ class TrainDataPaths:
 def setup():
     global args
 
-    fixed_params = FixedParameters(
-        num_epochs=args.num_epochs,
-        start_epoch=args.start_epoch,
-        patience=args.patience,
-        edge_batch_size=args.edge_batch_size,
-        duplicates=args.duplicates,
-    )
+    fixed_params = FixedParameters(args)
 
     print('--> loading data ...')
     start_time = time.time()
@@ -123,7 +117,8 @@ def setup():
                               valid_uid,
                               test_uid,
                               all_iid,
-                              fixed_params)
+                              edge_bs=fixed_params.edge_batch_size,
+                              node_bs=fixed_params.node_batch_size)
 
     dim_dict = {'user': valid_graph.nodes['user'].data['features'].shape[1],
                 'item': data.item_id_df.shape[0],

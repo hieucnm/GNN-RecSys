@@ -39,13 +39,7 @@ class TrainDataPaths:
 
 def main(args):
 
-    fixed_params = FixedParameters(
-        num_epochs=args.num_epochs,
-        start_epoch=args.start_epoch,
-        patience=args.patience,
-        edge_batch_size=args.edge_batch_size,
-        duplicates=args.duplicates,
-    )
+    fixed_params = FixedParameters(args)
 
     print('--> loading data ...')
     start_time = time.time()
@@ -119,7 +113,8 @@ def main(args):
                               valid_uid,
                               test_uid,
                               all_iid,
-                              fixed_params)
+                              edge_bs=fixed_params.edge_batch_size,
+                              node_bs=fixed_params.node_batch_size)
 
     print('--> initializing model ...')
     start_time = time.time()
@@ -160,7 +155,7 @@ def main(args):
                              test_uid,
                              all_iid,
                              fixed_params,
-                             num_workers=args.num_workers if not cuda else 0,
+                             num_workers=args.num_workers,
                              n_layers=args.n_layers,
                              neg_sample_size=args.neg_sample_size,
                              device=device,
@@ -254,21 +249,23 @@ parser.add_argument('-up', '--user-feature-path', type=str,
 parser.add_argument('-rp', '--result-dir', type=str,
                     default='/home/ubuntu/workspace/GNN-RecSys/examples/results',
                     help='Directory to save everything.')
-parser.add_argument('--out-dim', type=int, default=16, help='Output dimension')
-parser.add_argument('--hidden-dim', type=int, default=16, help='Hidden dimension')
-parser.add_argument('--n-layers', type=int, default=3, help='Number of layers')
+parser.add_argument('--out-dim', type=int, default=64, help='Output dimension')
+parser.add_argument('--hidden-dim', type=int, default=32, help='Hidden dimension')
+parser.add_argument('--n-layers', type=int, default=4, help='Number of layers')
 parser.add_argument('--dropout', type=float, default=0.1, help='Dropout ratio')
 parser.add_argument('--pred', type=str, default='cos', choices=['nn', 'cos'], help='Way to predict scores of link')
 parser.add_argument('--delta', type=float, default=0.05, help='Margin used in maximal margin loss')
 
-parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
+parser.add_argument('--lr', type=float, default=1e-3, help='Learning rate')
 parser.add_argument('--weight-decay', type=float, default=1e-5, help='Weight decay in SGD')
-parser.add_argument('--num-epochs', type=int, default=2, help='Number of epochs')
+parser.add_argument('--num-epochs', type=int, default=3, help='Number of epochs')
 parser.add_argument('--start_epoch', type=int, default=0, help='Starting from this epoch')
 parser.add_argument('--patience', type=int, default=1, help='Number of iteration to wait for early stopping')
-parser.add_argument('--neg-sample-size', type=int, default=5, help='Number of samples when doing negative sampling')
-parser.add_argument('--edge-batch-size', default=16, help='Number of edges in a train / validation batch')
-parser.add_argument('--num-workers', type=int, default=4, help='Number of cores of CPU to use')
+parser.add_argument('--neg-sample-size', type=int, default=3, help='Number of samples when doing negative sampling')
+parser.add_argument('--edge-batch-size', default=4096, help='Number of edges in a train / validation batch')
+parser.add_argument('--node-batch-size', default=2048, help='Number of nodes in a train / validation batch')
+parser.add_argument('--precision-at-k', default=5, help='Precision/Recall at this number will be computed')
+parser.add_argument('--num-workers', type=int, default=8, help='Number of cores of CPU to use')
 parser.add_argument('--check-embedding', action='store_true', default=False, help='Explore embedding result')
 parser.add_argument('--duplicates', type=str, default='count_occurrence',
                     choices=['count_occurrence', 'keep_all', 'keep_last'],

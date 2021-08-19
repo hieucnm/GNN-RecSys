@@ -24,7 +24,7 @@ class DataPaths:
 
 # noinspection PyUnresolvedReferences
 class FixedParameters:
-    def __init__(self, num_epochs, start_epoch, patience, edge_batch_size, duplicates):
+    def __init__(self, args, num_epochs, start_epoch, patience, edge_batch_size, node_batch_size, duplicates):
         """
         All parameters that are fixed, i.e. not part of the hyperparametrization.
 
@@ -78,7 +78,6 @@ class FixedParameters:
         self.uid_column = 'src_id'
         self.iid_column = 'ad_cate'
         self.pred = 'cos'  # cosine similarity
-        self.k = 10
         self.num_choices = 10
         self.neighbor_sampler = 'full'
         self.explore = True
@@ -90,14 +89,15 @@ class FixedParameters:
         self.run_inference = 1
         self.subtrain_size = 0.05
         self.valid_size = 0.05
-        self.node_batch_size = 128
         self.optimizer = torch.optim.Adam
 
-        self.duplicates = duplicates  # 'keep_last', 'keep_all', 'count_occurrence'
-        self.num_epochs = num_epochs
-        self.start_epoch = start_epoch
-        self.patience = patience
-        self.edge_batch_size = edge_batch_size
+        self.duplicates = args.duplicates  # 'keep_last', 'keep_all', 'count_occurrence'
+        self.num_epochs = args.num_epochs
+        self.start_epoch = args.start_epoch
+        self.patience = args.patience
+        self.edge_batch_size = args.edge_batch_size
+        self.node_batch_size = args.node_batch_size
+        self.k = args.precision_at_k
 
         # added by HieuCNM
         self.date_column = 'date'
@@ -249,22 +249,23 @@ def calculate_num_batches(train_eid_dict,
                           valid_uid,
                           test_uid,
                           all_iid,
-                          fixed_params):
+                          edge_bs,
+                          node_bs):
     train_eid_len = 0
     valid_eid_len = 0
     for e_type in train_eid_dict.keys():
         train_eid_len += len(train_eid_dict[e_type])
         valid_eid_len += len(valid_eid_dict[e_type])
-    num_batches_train = math.ceil(train_eid_len / fixed_params.edge_batch_size)
+    num_batches_train = math.ceil(train_eid_len / edge_bs)
     num_batches_sub_train = math.ceil(
-        (len(sub_train_uid) + len(all_iid)) / fixed_params.node_batch_size
+        (len(sub_train_uid) + len(all_iid)) / node_bs
     )
-    num_batches_val_loss = math.ceil(valid_eid_len / fixed_params.edge_batch_size)
+    num_batches_val_loss = math.ceil(valid_eid_len / edge_bs)
     num_batches_val_metrics = math.ceil(
-        (len(valid_uid) + len(all_iid)) / fixed_params.node_batch_size
+        (len(valid_uid) + len(all_iid)) / node_bs
     )
     num_batches_test = math.ceil(
-        (len(test_uid) + len(all_iid)) / fixed_params.node_batch_size
+        (len(test_uid) + len(all_iid)) / node_bs
     )
     return num_batches_train, num_batches_sub_train, num_batches_test, num_batches_val_loss, num_batches_val_metrics
 

@@ -143,7 +143,7 @@ def train_model(model,
                            )
             if (i + 1) % 10 == 0:
                 print("Epoch {}/{} - Batch {}/{}: loss = {:.5f}".format(
-                    epoch, num_epochs, i + 1, num_batches_train, loss.item()))
+                    epoch, num_epochs, i + 1, len(edgeloader_train), loss.item()))
 
             if epoch > 0:  # For the epoch 0, no training (just report loss)
                 loss.backward()
@@ -207,7 +207,7 @@ def train_model(model,
                 total_loss += val_loss.item()
                 if (i + 1) % 10 == 0:
                     print("Epoch {}/{} - Batch {}/{}: loss = {:.5f}".format(
-                        epoch, num_epochs, i + 1, num_batches_val_loss, val_loss.item()))
+                        epoch, num_epochs, i + 1, len(edgeloader_valid), val_loss.item()))
             val_avg_loss = total_loss / (i + 1)
             model.val_loss_list.append(val_avg_loss)
 
