@@ -24,7 +24,7 @@ class DataPaths:
 
 # noinspection PyUnresolvedReferences
 class FixedParameters:
-    def __init__(self, args, num_epochs, start_epoch, patience, edge_batch_size, node_batch_size, duplicates):
+    def __init__(self, args):
         """
         All parameters that are fixed, i.e. not part of the hyperparametrization.
 
