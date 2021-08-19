@@ -189,7 +189,7 @@ def main(args):
         pred=args.pred,
         delta=args.delta,
         out_dim=args.out_dim,
-        patience=args.patience,
+        patience=args.num_epochs,  # no early stop
         num_epochs=args.num_epochs,
         start_epoch=args.start_epoch,
         neg_sample_size=args.neg_sample_size,
@@ -256,7 +256,7 @@ parser.add_argument('--dropout', type=float, default=0.1, help='Dropout ratio')
 parser.add_argument('--pred', type=str, default='cos', choices=['nn', 'cos'], help='Way to predict scores of link')
 parser.add_argument('--delta', type=float, default=0.05, help='Margin used in maximal margin loss')
 
-parser.add_argument('--lr', type=float, default=1e-3, help='Learning rate')
+parser.add_argument('--lr', type=float, default=0.1, help='Learning rate')
 parser.add_argument('--weight-decay', type=float, default=1e-5, help='Weight decay in SGD')
 parser.add_argument('--num-epochs', type=int, default=3, help='Number of epochs')
 parser.add_argument('--start_epoch', type=int, default=0, help='Starting from this epoch')
