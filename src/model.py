@@ -500,13 +500,12 @@ def max_margin_loss(pos_score,
     negative_mask:
         For each negative example, indicator if it is a false negative or not.
     """
-    all_scores = torch.empty(0)
-    if cuda:
-        all_scores = all_scores.to(device)
+    all_scores = torch.empty(0).to(device)
     for etype in pos_score.keys():
         neg_score_tensor = neg_score[etype]
         pos_score_tensor = pos_score[etype]
         neg_score_tensor = neg_score_tensor.reshape(-1, neg_sample_size)
+
         if remove_false_negative:
             negative_mask_tensor = negative_mask[etype].reshape(-1, neg_sample_size)
         else:
@@ -524,3 +523,37 @@ def max_margin_loss(pos_score,
                 pass
         all_scores = torch.cat((all_scores, scores), 0)
     return torch.mean(all_scores)
+
+
+def bce_loss(pos_score,
+             neg_score,
+             delta: float,
+             neg_sample_size: int,
+             use_recency: bool = False,
+             recency_scores=None,
+             remove_false_negative: bool = False,
+             negative_mask=None,
+             cuda=False,
+             device=None
+             ):
+    """
+    See max_margin_loss for detail.
+    Tensors should be in the range (0,1),i.e use sigmoid model forward()
+    """
+    # Test BCELoss,
+    loss_fn = nn.BCELoss()
+    total_loss = torch.empty(1).to(device)
+
+    for etype in pos_score.keys():
+        pos_score_tensor = pos_score[etype].flatten()
+        neg_score_tensor = neg_score[etype].flatten()
+        if pos_score_tensor.shape[0] == 0:
+            continue
+
+        scores = torch.hstack([pos_score_tensor, neg_score_tensor])
+        labels = torch.hstack([torch.ones_like(pos_score_tensor),
+                               torch.zeros_like(neg_score_tensor)])
+        loss = loss_fn(scores, labels)
+        total_loss += loss
+
+    return total_loss.mean()

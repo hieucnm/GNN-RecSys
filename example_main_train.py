@@ -245,14 +245,15 @@ parser.add_argument('-up', '--user-feature-path', type=str,
 parser.add_argument('-rp', '--result-dir', type=str,
                     default='examples/results',
                     help='Directory to save everything.')
-parser.add_argument('--out-dim', type=int, default=64, help='Output dimension')
-parser.add_argument('--hidden-dim', type=int, default=32, help='Hidden dimension')
-parser.add_argument('--n-layers', type=int, default=4, help='Number of layers')
+parser.add_argument('--out-dim', type=int, default=128, help='Output dimension')
+parser.add_argument('--hidden-dim', type=int, default=256,
+                    help='Hidden dimension. Be careful! Increasing this number will increase the memory so much. ')
+
+parser.add_argument('--n-layers', type=int, default=4, help='Number of layers, including embedding layer.')
 parser.add_argument('--dropout', type=float, default=0.1, help='Dropout ratio')
 parser.add_argument('--pred', type=str, default='cos', choices=['nn', 'cos'], help='Way to predict scores of link')
 parser.add_argument('--delta', type=float, default=0.05, help='Margin used in maximal margin loss')
-
-parser.add_argument('--lr', type=float, default=0.1, help='Learning rate')
+parser.add_argument('--lr', type=float, default=0.01, help='Learning rate')
 parser.add_argument('--weight-decay', type=float, default=1e-5, help='Weight decay in SGD')
 parser.add_argument('--num-epochs', type=int, default=3, help='Number of epochs')
 parser.add_argument('--start_epoch', type=int, default=0, help='Starting from this epoch')
@@ -263,10 +264,17 @@ parser.add_argument('--node-batch-size', type=int, default=2048, help='Number of
 parser.add_argument('--precision-at-k', type=int, default=5, help='Precision/Recall at this number will be computed')
 parser.add_argument('--num-workers', type=int, default=8, help='Number of cores of CPU to use')
 parser.add_argument('--check-embedding', action='store_true', default=False, help='Explore embedding result')
-parser.add_argument('--duplicates', type=str, default='count_occurrence',
+parser.add_argument('--use-ddp', action='store_true', default=False, help='Only use for multi-GPU')
+
+parser.add_argument('--num-neighbors', type=int, default=512,
+                    help='Number of random neighbors to aggregate. '
+                         'Set 0 to use all neighbors, but not recommended because the memory will explode. '
+                         'For now we use the same number for all layers. '
+                         'Later, we will set different numbers for different layers by passing a list.')
+
+parser.add_argument('--duplicates', type=str, default='keep_last',
                     choices=['count_occurrence', 'keep_all', 'keep_last'],
-                    help='Way to handle duplicate interactions')
-parser.add_argument('--use-ddp', action='store_true', default=False, help='Use DistributedDataParallel')
+                    help='Way to handle duplicated interactions')
 
 if __name__ == '__main__':
     print(f"Using device: {device.type}")

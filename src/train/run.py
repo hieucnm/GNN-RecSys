@@ -10,12 +10,12 @@ from src.utils import save_txt
 
 def print_one_batch(batch):
     tensors, pos_g, neg_g, blocks = batch
-    print("tensors.keys:", tensors.keys())
-    print("x.item:", tensors['item'].shape)
-    print("x.user:", tensors['user'].shape)
+    # print("tensors.keys:", tensors.keys())
+    # print("x.item:", tensors['item'].shape)
+    # print("x.user:", tensors['user'].shape)
     print("pos_g:", pos_g)
-    print("neg_g:", neg_g)
-    print("blocks:", blocks)
+    # print("neg_g:", neg_g)
+    # print("blocks:", blocks)
 
 
 def train_model(model,
@@ -98,7 +98,7 @@ def train_model(model,
         total_loss = 0
         print(f'--> Epoch {epoch}/{num_epochs} : Training ...')
         for i, (_, pos_g, neg_g, blocks) in enumerate(edgeloader_train):
-            # print out what inside a batch, remember to break
+            # print out what inside a batch to debug, remember to break
             # print_one_batch((_, pos_g, neg_g, blocks))
             # break
 
@@ -132,6 +132,13 @@ def train_model(model,
                                             pos_g,
                                             neg_g
                                             )
+
+            # print("pos_g.clicks      :", pos_g.num_edges(('user', 'clicks', 'item')))
+            # print("pos_score.clicks  :", pos_score[('user', 'clicks', 'item')].shape)
+            # print("pos_g.converts    :", pos_g.num_edges(('user', 'converts', 'item')))
+            # print("pos_score.converts:", pos_score[('user', 'converts', 'item')].shape)
+            # print('-------------------------------------------------------------------')
+
             loss = loss_fn(pos_score,
                            neg_score,
                            delta,

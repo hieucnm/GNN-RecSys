@@ -79,7 +79,6 @@ class FixedParameters:
         self.iid_column = 'ad_cate'
         self.pred = 'cos'  # cosine similarity
         self.num_choices = 10
-        self.neighbor_sampler = 'full'
         self.explore = True
         self.remove_false_negative = True
         self.remove_train_eids = False
@@ -98,6 +97,7 @@ class FixedParameters:
         self.edge_batch_size = args.edge_batch_size
         self.node_batch_size = args.node_batch_size
         self.k = args.precision_at_k
+        self.num_neighbors = args.num_neighbors
 
         # added by HieuCNM
         self.date_column = 'date'

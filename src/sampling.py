@@ -59,7 +59,7 @@ def train_valid_split(valid_graph: dgl.DGLHeteroGraph,
         if (etype == ('user', 'converts', 'item')) or (etype == ('user', 'clicks', 'item') and train_on_clicks):
             valid_eids_dict[etype] = valid_eids
 
-    # added by HieuCNM: Cẩn thậ, chỗ này đang lấy tất cả relationship (ở đây là click và conv) làm nhãn,
+    # added by HieuCNM: Cẩn thận, chỗ này đang lấy tất cả relationship (ở đây là click và conv) làm nhãn,
     #   nếu sau này dùng tới zalo_friend, thì phải loại các edge này ra, chỉ dùng click và conv là nhãn,
     #   nếu không, model sẽ học luôn smilarity của các user có zalo_friend -> không đúng
     ground_truth_valid = (np.array(valid_uids_all), np.array(valid_iids_all))
@@ -157,16 +157,12 @@ def generate_dataloaders(valid_graph,
     """
     n_layers = params['n_layers'] - 1  # except the embedding layer
 
-    if fixed_params.neighbor_sampler == 'full':
+    if fixed_params.num_neighbors == 0:
         sampler = dgl.dataloading.MultiLayerFullNeighborSampler(n_layers)
-    elif fixed_params.neighbor_sampler == 'partial':
-        sampler = dgl.dataloading.MultiLayerNeighborSampler([1, 1, 1], replace=False)
     else:
-        raise KeyError('Neighbor sampler {} not recognized.'.format(fixed_params.neighbor_sampler))
+        sampler = dgl.dataloading.MultiLayerNeighborSampler([fixed_params.num_neighbors] * n_layers, replace=False)
 
-    sampler_n = dgl.dataloading.negative_sampler.Uniform(
-        params['neg_sample_size']
-    )
+    sampler_n = dgl.dataloading.negative_sampler.Uniform(params['neg_sample_size'])
 
     edge_param_train = {
         'g': valid_graph,
@@ -174,7 +170,7 @@ def generate_dataloaders(valid_graph,
         'block_sampler': sampler,
         'negative_sampler': sampler_n,
         'batch_size': fixed_params.edge_batch_size,
-        'shuffle': True,
+        'shuffle': False,  # set to False when debugging
         'drop_last': False,  # Drop last batch if non-full
         'pin_memory': True,  # Helps the transfer to GPU
         'num_workers': num_workers,
@@ -217,7 +213,7 @@ def generate_dataloaders(valid_graph,
         'nids': {'user': subtrain_uids, 'item': all_iids},
         'block_sampler': sampler,
         'batch_size': fixed_params.node_batch_size,
-        'shuffle': True,
+        'shuffle': False,  # set to False when debugging
         'drop_last': False,
         'num_workers': num_workers,
     }
@@ -261,12 +257,10 @@ def generate_test_loaders(train_graph,
     """
     n_layers = params['n_layers'] - 1  # except the embedding layer
 
-    if fixed_params.neighbor_sampler == 'full':
+    if fixed_params.num_neighbors == 0:
         sampler = dgl.dataloading.MultiLayerFullNeighborSampler(n_layers)
-    elif fixed_params.neighbor_sampler == 'partial':
-        sampler = dgl.dataloading.MultiLayerNeighborSampler([1, 1, 1], replace=False)
     else:
-        raise KeyError('Neighbor sampler {} not recognized.'.format(fixed_params.neighbor_sampler))
+        sampler = dgl.dataloading.MultiLayerNeighborSampler([fixed_params.num_neighbors] * n_layers, replace=False)
 
     node_param_test = {
         'g': train_graph,
