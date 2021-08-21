@@ -112,7 +112,7 @@ def recs_to_metrics(recs, similarities, ground_truth_dict, g):
     y_true = []
     y_score = []
     for uid, scores in similarities.items():
-        scores = (scores + 1) / 2  # convert range (-1,1) to (0,1)
+        # scores = (scores + 1) / 2  # convert range (-1,1) to (0,1) if necessary
         y_score.extend(scores)
         y_true.extend([int(iid in ground_truth_dict[uid]) for iid in range(nb_total)])
     auc = roc_auc_score(y_true=y_true, y_score=y_score)
