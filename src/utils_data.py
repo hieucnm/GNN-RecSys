@@ -6,6 +6,7 @@ import torch
 from src.builder import (create_ids, df_to_adjacency_list, import_features,
                          filter_unseen_item, report_user_coverage)
 from src.utils import read_data
+from src.model import MaxMarginLoss, BCELossCustom
 
 
 class DataPaths:
@@ -75,14 +76,10 @@ class FixedParameters:
             self.etype.append(('user', 'clicks', 'item'))
             self.reverse_etype[('user', 'clicks', 'item')] = ('item', 'clicked-by', 'user')
 
-        self.uid_column = 'src_id'
-        self.iid_column = 'ad_cate'
-        self.pred = 'cos'  # cosine similarity
         self.num_choices = 10
         self.explore = True
-        self.remove_false_negative = True
+        self.remove_false_negative = True  # default True
         self.remove_train_eids = False
-        self.report_model_coverage = False
         self.train_on_clicks = True
         self.remove_on_inference = .7
         self.run_inference = 1
@@ -98,8 +95,18 @@ class FixedParameters:
         self.node_batch_size = args.node_batch_size
         self.k = args.precision_at_k
         self.num_neighbors = args.num_neighbors
+        self.pred = args.pred
+        if self.pred == 'cos':
+            self.loss_fn = MaxMarginLoss(
+                delta=args.delta,
+                neg_sample_size=args.neg_sample_size,
+                remove_false_negative=self.remove_false_negative
+            )
+        else:
+            self.loss_fn = BCELossCustom()
 
-        # added by HieuCNM
+        self.uid_column = 'src_id'
+        self.iid_column = 'ad_cate'
         self.date_column = 'date'
         self.conv_column = 'converted'
         self.use_recency = True

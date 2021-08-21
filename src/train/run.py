@@ -113,9 +113,7 @@ def train_model(model,
                     neg_src = nids[etype[0]][neg_src]
                     neg_dst = nids[etype[2]][neg_dst]
                     negative_mask_tensor = valid_graph.has_edges_between(neg_src, neg_dst, etype=etype)
-                    negative_mask[etype] = negative_mask_tensor.type(torch.float)
-                    if cuda:
-                        negative_mask[etype] = negative_mask[etype].to(device)
+                    negative_mask[etype] = negative_mask_tensor.type(torch.float).to(device)
             if cuda:
                 blocks = [b.to(device) for b in blocks]
                 pos_g = pos_g.to(device)
@@ -127,11 +125,7 @@ def train_model(model,
             if use_recency:
                 recency_scores = pos_g.edata['recency']
 
-            _, pos_score, neg_score = model(blocks,
-                                            input_features,
-                                            pos_g,
-                                            neg_g
-                                            )
+            _, pos_score, neg_score = model(blocks, input_features, pos_g, neg_g)
 
             # print("pos_g.clicks      :", pos_g.num_edges(('user', 'clicks', 'item')))
             # print("pos_score.clicks  :", pos_score[('user', 'clicks', 'item')].shape)
@@ -141,15 +135,10 @@ def train_model(model,
 
             loss = loss_fn(pos_score,
                            neg_score,
-                           delta,
-                           neg_sample_size,
-                           use_recency=use_recency,
                            recency_scores=recency_scores,
-                           remove_false_negative=remove_false_negative,
-                           negative_mask=negative_mask,
-                           cuda=cuda,
-                           device=device,
+                           negative_mask=negative_mask
                            )
+
             if (i + 1) % 10 == 0:
                 print("Epoch {}/{} - Batch {}/{}: loss = {:.5f}".format(
                     epoch, num_epochs, i + 1, len(edgeloader_train), loss.item()))
@@ -161,6 +150,11 @@ def train_model(model,
 
             if epoch == 0 and i > 10:
                 break  # For the epoch 0, report loss on only subset
+
+        # only for debug ==
+        #     break
+        # continue
+        # =================
 
         train_avg_loss = total_loss / (i + 1)
         model.train_loss_list.append(train_avg_loss)
@@ -204,14 +198,8 @@ def train_model(model,
 
                 val_loss = loss_fn(pos_score,
                                    neg_score,
-                                   delta,
-                                   neg_sample_size,
-                                   use_recency=use_recency,
                                    recency_scores=recency_scores,
-                                   remove_false_negative=remove_false_negative,
-                                   negative_mask=negative_mask,
-                                   cuda=cuda,
-                                   device=device,
+                                   negative_mask=negative_mask
                                    )
                 total_loss += val_loss.item()
                 if (i + 1) % 10 == 0:

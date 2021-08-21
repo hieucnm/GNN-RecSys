@@ -10,7 +10,7 @@ from glob import glob
 
 from src.utils_data import DataLoader, assign_graph_features, summary_data_sets, calculate_num_batches
 from src.utils import read_data, save_txt, save_everything
-from src.model import ConvModel, max_margin_loss
+from src.model import ConvModel
 from src.sampling import train_valid_split, generate_dataloaders, generate_test_loaders
 from src.train.run import train_model, get_embeddings
 from src.utils_vizualization import plot_train_loss
@@ -212,7 +212,7 @@ def train(device, params):
         bought_eids=train_eid_dict[('user', 'converts', 'item')],
         remove_already_bought=True,
         get_metrics=True,
-        loss_fn=max_margin_loss,
+        loss_fn=fixed_params.loss_fn,
         device=device,
         lr=args.lr,
         pred=args.pred,
@@ -246,46 +246,46 @@ def train(device, params):
     save_txt(sentence, train_data_paths.log_filepath, mode='a')
 
 
-def test():
-    # Report performance on test set
-    log.debug('--> testing ...')
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    node_loader_test = generate_test_loaders(train_graph, test_uid, all_iid, fixed_params,
-                                             num_workers=0,
-                                             n_layers=args.n_layers)
-    model = ConvModel(valid_graph,
-                      args.n_layers,
-                      dim_dict,
-                      fixed_params.norm,
-                      args.dropout,
-                      fixed_params.aggregator_type,
-                      fixed_params.pred,
-                      fixed_params.aggregator_hetero
-                      )
-    latest_model_path = sorted([f for f in glob(train_data_paths.result_dir) if f.endswith('pth')])[-1]
-    model.load_state_dict(torch.load(latest_model_path, map_location=device))
-    log.debug('--> model loaded! Calculating test metrics ...')
-    model.eval()
-    with torch.no_grad():
-        embeddings = get_embeddings(valid_graph, args.out_dim, model, node_loader_test, device)
-
-        for ground_truth in [data.ground_truth_convert_test, data.ground_truth_test]:
-            precision, recall, coverage, auc = get_metrics_at_k(embeddings,
-                                                           valid_graph,
-                                                           model,
-                                                           args.out_dim,
-                                                           ground_truth,
-                                                           all_eid_dict[('user', 'converts', 'item')],
-                                                           fixed_params.k,
-                                                           False,  # Remove already bought
-                                                           device,
-                                                           args.pred)
-            sentence = ("TEST Precision {:.3f}% | Recall {:.3f}% | Coverage {:.2f}%"
-                        .format(precision * 100,
-                                recall * 100,
-                                coverage * 100))
-            log.info(sentence)
-            save_txt(sentence, train_data_paths.log_filepath, mode='a')
+# def test():
+#     # Report performance on test set
+#     log.debug('--> testing ...')
+#     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+#     node_loader_test = generate_test_loaders(train_graph, test_uid, all_iid, fixed_params,
+#                                              num_workers=0,
+#                                              n_layers=args.n_layers)
+#     model = ConvModel(valid_graph,
+#                       args.n_layers,
+#                       dim_dict,
+#                       fixed_params.norm,
+#                       args.dropout,
+#                       fixed_params.aggregator_type,
+#                       fixed_params.pred,
+#                       fixed_params.aggregator_hetero
+#                       )
+#     latest_model_path = sorted([f for f in glob(train_data_paths.result_dir) if f.endswith('pth')])[-1]
+#     model.load_state_dict(torch.load(latest_model_path, map_location=device))
+#     log.debug('--> model loaded! Calculating test metrics ...')
+#     model.eval()
+#     with torch.no_grad():
+#         embeddings = get_embeddings(valid_graph, args.out_dim, model, node_loader_test, device)
+#
+#         for ground_truth in [data.ground_truth_convert_test, data.ground_truth_test]:
+#             precision, recall, coverage, auc = get_metrics_at_k(embeddings,
+#                                                            valid_graph,
+#                                                            model,
+#                                                            args.out_dim,
+#                                                            ground_truth,
+#                                                            all_eid_dict[('user', 'converts', 'item')],
+#                                                            fixed_params.k,
+#                                                            False,  # Remove already bought
+#                                                            device,
+#                                                            args.pred)
+#             sentence = ("TEST Precision {:.3f}% | Recall {:.3f}% | Coverage {:.2f}%"
+#                         .format(precision * 100,
+#                                 recall * 100,
+#                                 coverage * 100))
+#             log.info(sentence)
+#             save_txt(sentence, train_data_paths.log_filepath, mode='a')
 
 
 def init_process(pid, num_pid, fn, fn_params=None):

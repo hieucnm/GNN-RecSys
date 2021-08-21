@@ -14,6 +14,7 @@ class NodeEmbedding(nn.Module):
     Otherwise, the node features will be projected to the embedding space,
         and a batch_norm layer also be used to normalize the features
     """
+
     def __init__(self,
                  in_feats,
                  out_feats,
@@ -321,6 +322,7 @@ class CosinePrediction(nn.Module):
 
     Only used if fixed_params.pred == 'cos'.
     """
+
     def __init__(self):
         super().__init__()
 
@@ -463,97 +465,101 @@ class ConvModel(nn.Module):
         return h, pos_score, neg_score
 
 
-def max_margin_loss(pos_score,
-                    neg_score,
-                    delta: float,
-                    neg_sample_size: int,
-                    use_recency: bool = False,
-                    recency_scores=None,
-                    remove_false_negative: bool = False,
-                    negative_mask=None,
-                    cuda=False,
-                    device=None
-                    ):
+class MaxMarginLoss(nn.Module):
     """
-    Simple max margin loss.
+        Simple max margin loss.
 
-    Parameters
-    ----------
-    pos_score:
-        All similarity scores for positive examples.
-    neg_score:
-        All similarity scores for negative examples.
-    delta:
-        Delta from which the pos_score should be higher than all its corresponding neg_score.
-    neg_sample_size:
-        Number of negative examples to generate for each positive example.
-        See main.SearchableHyperparameters for more details.
-    use_recency:
-        If true, loss will be divided by the recency, i.e. more recent positive examples will be given a
-        greater weight in the total loss.
-        See main.SearchableHyperparameters for more details.
-    recency_score:
-        Loss will be divided by the recency if use_recency == True. Those are the recency, for all training edges.
-    remove_false_negative:
-        When generating negative examples, it is possible that a random negative example is actually in the graph,
-        i.e. it should not be a negative example. If true, those will be removed.
-    negative_mask:
-        For each negative example, indicator if it is a false negative or not.
+        Parameters
+        ----------
+        pos_score:
+            All similarity scores for positive examples.
+        neg_score:
+            All similarity scores for negative examples.
+        delta:
+            Delta from which the pos_score should be higher than all its corresponding neg_score.
+        neg_sample_size:
+            Number of negative examples to generate for each positive example.
+            See main.SearchableHyperparameters for more details.
+        recency_score:
+            If not None, loss will be divided by the recency, i.e. more recent positive examples will be given a
+            greater weight in the total loss. Those are the recency, for all training edges.
+        remove_false_negative:
+            When generating negative examples, it is possible that a random negative example is actually in the graph,
+            i.e. it should not be a negative example. If true, those will be removed.
+        negative_mask:
+            For each negative example, indicator if it is a false negative or not.
+        """
+
+    def __init__(self,
+                 delta: float,
+                 neg_sample_size: int,
+                 remove_false_negative: bool = False
+                 ):
+        super().__init__()
+        self.delta = delta
+        self.remove_false_negative = remove_false_negative
+        self.neg_sample_size = neg_sample_size
+        self.relu = nn.ReLU()
+
+    def forward(self, pos_score, neg_score, **params):
+
+        recency_scores = params['recency_scores']
+        negative_mask = params['negative_mask']  # make sure this tensor already on cuda
+
+        device = pos_score[list(pos_score.keys())[0]].device
+        all_scores = torch.empty(0).to(device)
+
+        for etype in pos_score.keys():
+            neg_score_tensor = neg_score[etype]
+            pos_score_tensor = pos_score[etype]
+            neg_score_tensor = neg_score_tensor.reshape(-1, self.neg_sample_size)
+
+            if self.remove_false_negative:
+                negative_mask_tensor = negative_mask[etype].reshape(-1, self.neg_sample_size)
+            else:
+                negative_mask_tensor = torch.zeros(size=neg_score_tensor.shape).to(device)
+            scores = neg_score_tensor + self.delta - pos_score_tensor - negative_mask_tensor
+            scores = self.relu(scores)
+
+            if recency_scores is not None:
+                try:
+                    recency_scores_tensor = recency_scores[etype]
+                    scores = scores / torch.unsqueeze(recency_scores_tensor, 1)
+                except KeyError:
+                    # Not all edge types have recency. Only training edges have recency (i.e. clicks & buys)
+                    pass
+            all_scores = torch.cat((all_scores, scores), 0)
+
+        # print("scores: max = {:.3f} | min = {:.3f} | len = {}".format(
+        #     torch.max(all_scores).item(), torch.min(all_scores).item(), all_scores.shape[0]
+        # ))
+        return torch.mean(all_scores)
+
+
+class BCELossCustom(nn.Module):
     """
-    all_scores = torch.empty(0).to(device)
-    for etype in pos_score.keys():
-        neg_score_tensor = neg_score[etype]
-        pos_score_tensor = pos_score[etype]
-        neg_score_tensor = neg_score_tensor.reshape(-1, neg_sample_size)
-
-        if remove_false_negative:
-            negative_mask_tensor = negative_mask[etype].reshape(-1, neg_sample_size)
-        else:
-            negative_mask_tensor = torch.zeros(size=neg_score_tensor.shape)
-        if cuda:
-            negative_mask_tensor = negative_mask_tensor.to(device)
-        scores = neg_score_tensor + delta - pos_score_tensor - negative_mask_tensor
-        relu = nn.ReLU()
-        scores = relu(scores)
-        if use_recency:
-            try:
-                recency_scores_tensor = recency_scores[etype]
-                scores = scores / torch.unsqueeze(recency_scores_tensor, 1)
-            except KeyError:  # Not all edge types have recency. Only training edges have recency (i.e. clicks & buys)
-                pass
-        all_scores = torch.cat((all_scores, scores), 0)
-    return torch.mean(all_scores)
-
-
-def bce_loss(pos_score,
-             neg_score,
-             delta: float,
-             neg_sample_size: int,
-             use_recency: bool = False,
-             recency_scores=None,
-             remove_false_negative: bool = False,
-             negative_mask=None,
-             cuda=False,
-             device=None
-             ):
+        See MaxMarginLoss for detail.
     """
-    See max_margin_loss for detail.
-    Tensors should be in the range (0,1),i.e use sigmoid model forward()
-    """
-    # Test BCELoss,
-    loss_fn = nn.BCELoss()
-    total_loss = torch.empty(1).to(device)
 
-    for etype in pos_score.keys():
-        pos_score_tensor = pos_score[etype].flatten()
-        neg_score_tensor = neg_score[etype].flatten()
-        if pos_score_tensor.shape[0] == 0:
-            continue
+    def __init__(self):
+        super().__init__()
+        self.bce = nn.BCELoss()
 
-        scores = torch.hstack([pos_score_tensor, neg_score_tensor])
-        labels = torch.hstack([torch.ones_like(pos_score_tensor),
-                               torch.zeros_like(neg_score_tensor)])
-        loss = loss_fn(scores, labels)
-        total_loss += loss
+    def forward(self, pos_score, neg_score, **params):
+        device = pos_score[list(pos_score.keys())[0]].device
+        all_scores = torch.empty(0).to(device)
+        all_labels = torch.empty(0).to(device)
+        for etype in pos_score.keys():
+            pos_score_tensor = pos_score[etype].flatten()
+            neg_score_tensor = neg_score[etype].flatten()
+            if pos_score_tensor.shape[0] == 0:
+                continue
 
-    return total_loss.mean()
+            all_scores = torch.cat((all_scores, pos_score_tensor, neg_score_tensor), dim=0)
+            all_labels = torch.cat((all_labels,
+                                    torch.ones_like(pos_score_tensor),
+                                    torch.zeros_like(neg_score_tensor)), dim=0)
+        # print("scores: max = {:.3f} | min = {:.3f} | len = {}".format(
+        #     torch.max(all_scores).item(), torch.min(all_scores).item(), all_scores.shape[0]
+        # ))
+        return self.bce(all_scores, all_labels)

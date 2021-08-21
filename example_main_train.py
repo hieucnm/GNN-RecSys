@@ -8,7 +8,7 @@ from dgl import heterograph
 
 from src.utils_data import DataLoader, assign_graph_features, summary_data_sets, calculate_num_batches
 from src.utils import read_data, save_txt, save_everything
-from src.model import ConvModel, max_margin_loss
+from src.model import ConvModel
 from src.sampling import train_valid_split, generate_dataloaders
 from src.train.run import train_model, get_embeddings
 from src.metrics import (get_metrics_at_k)
@@ -178,7 +178,7 @@ def main(args):
         bought_eids=train_eid_dict[('user', 'converts', 'item')],
         remove_already_bought=True,
         get_metrics=True,
-        loss_fn=max_margin_loss,
+        loss_fn=fixed_params.loss_fn,
         device=device,
         lr=args.lr,
         pred=args.pred,
@@ -253,7 +253,7 @@ parser.add_argument('--n-layers', type=int, default=4, help='Number of layers, i
 parser.add_argument('--dropout', type=float, default=0.1, help='Dropout ratio')
 parser.add_argument('--pred', type=str, default='cos', choices=['nn', 'cos'], help='Way to predict scores of link')
 parser.add_argument('--delta', type=float, default=0.05, help='Margin used in maximal margin loss')
-parser.add_argument('--lr', type=float, default=0.01, help='Learning rate')
+parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
 parser.add_argument('--weight-decay', type=float, default=1e-5, help='Weight decay in SGD')
 parser.add_argument('--num-epochs', type=int, default=3, help='Number of epochs')
 parser.add_argument('--start_epoch', type=int, default=0, help='Starting from this epoch')
@@ -265,7 +265,6 @@ parser.add_argument('--precision-at-k', type=int, default=5, help='Precision/Rec
 parser.add_argument('--num-workers', type=int, default=8, help='Number of cores of CPU to use')
 parser.add_argument('--check-embedding', action='store_true', default=False, help='Explore embedding result')
 parser.add_argument('--use-ddp', action='store_true', default=False, help='Only use for multi-GPU')
-
 parser.add_argument('--num-neighbors', type=int, default=512,
                     help='Number of random neighbors to aggregate. '
                          'Set 0 to use all neighbors, but not recommended because the memory will explode. '
