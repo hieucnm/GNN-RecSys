@@ -1,14 +1,17 @@
 import argparse
+import os
 import warnings
 
 import torch
 import torch.optim
+import datetime as dt
 
 from custom.datasets import DataSet
 from custom.utils_data import get_edge_loader, get_node_loader
 from custom.models import ConvModel
 from custom.trainers import Trainer, get_embeddings
-from losses import MaxMarginLoss, BCELossCustom
+from custom.losses import MaxMarginLoss, BCELossCustom
+from custom.metrics import get_metrics_at_k
 from collections import defaultdict
 
 warnings.filterwarnings('ignore')
@@ -16,6 +19,12 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
 def main():
+
+    timestamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
+    result_dir = f'{args.result_dir}/{timestamp}'
+    os.makedirs(result_dir)
+    log_filepath = f'{result_dir}/running_log.txt'
+
     train_data = DataSet(data_dir=args.train_dir)
     train_graph = train_data.init_graph()
     label_edge_types = train_data.label_edge_types
@@ -86,44 +95,101 @@ def main():
 
     # TRAIN
     metrics = defaultdict(list)
+    start_time = dt.datetime.now()
     print('Start training:')
     for epoch in range(args.num_epochs):
-        print('--> Epoch {}/{}: Training ...'.format(epoch, args.num_epochs))
-        epoch_avg_train_loss = trainer.train(train_edge_loader)
-        metrics['train_loss'].append(epoch_avg_train_loss)
 
-        # print('--> Epoch {}/{}: Calculating training metrics ...'.format(epoch, args.num_epochs))
-        # y = get_embeddings(graph=train_graph, embed_dim=dim_dict['out'],
-        #                    model=model, node_loader=sub_train_node_loader)
+        print('--> Epoch {}/{}: Training ...'.format(epoch, args.num_epochs))
+        train_avg_loss = trainer.train(train_edge_loader)
+
+        torch.save(model.state_dict(), f'{result_dir}/model_ep_{epoch}.pth')
+        print("--> Model saved!")
+
+        print('--> Epoch {}/{}: Extracting sub-train embeddings ...'.format(epoch, args.num_epochs))
+        embed_dict = get_embeddings(model=model,
+                                    graph=train_graph,
+                                    node_loader=sub_train_node_loader,
+                                    embed_dim=dim_dict['out'],
+                                    print_every=args.print_every
+                                    )
+        print('--> Epoch {}/{}: Calculating sub-train metrics ...'.format(epoch, args.num_epochs))
+        train_precision, train_recall, train_coverage, train_auc = get_metrics_at_k(
+            embed_dict=embed_dict,
+            ground_truth=sub_train_ground_truth,
+            model=model,
+            num_unique_items=train_graph.num_nodes(train_data.item_id),
+            k=args.precision_at_k,
+            user_id=train_data.user_id,
+            item_id=train_data.item_id,
+        )
 
         print('--> Epoch {}/{}: Calculating validation loss ...'.format(epoch, args.num_epochs))
-        epoch_avg_valid_loss = trainer.calculate_loss(valid_edge_loader)
-        metrics['valid_loss'].append(epoch_avg_valid_loss)
+        val_avg_loss = trainer.calculate_loss(valid_edge_loader)
 
-        # calculate valid loss
-        # calculate train & valid precision, recall, coverage, auc
-        # save model & write log
+        print('--> Epoch {}/{}: Extracting validation embeddings '.format(epoch, args.num_epochs))
+        embed_dict = get_embeddings(model=model,
+                                    graph=valid_graph,
+                                    node_loader=valid_node_loader,
+                                    embed_dim=dim_dict['out'],
+                                    print_every=args.print_every
+                                    )
+        print('--> Epoch {}/{}: Calculating validation metrics ...'.format(epoch, args.num_epochs))
+        val_precision, val_recall, val_coverage, val_auc = get_metrics_at_k(
+            embed_dict=embed_dict,
+            ground_truth=valid_ground_truth,
+            model=model,
+            num_unique_items=valid_graph.num_nodes(train_data.item_id),
+            k=args.precision_at_k,
+            user_id=train_data.user_id,
+            item_id=train_data.item_id,
+        )
+
+        report = "--> Finish epoch {:02d}/{:02d} " \
+                 "|| Training Loss {:.5f} | Precision {:.3f}% | Recall {:.3f}% | Coverage {:.2f} | AUC {:.2f}% " \
+                 "|| Validation Loss {:.5f} | Precision {:.3f}% | Recall {:.3f}% | Coverage {:.2f}% | AUC {:.2f}%"\
+            .format(epoch, args.num_epochs,
+                    train_avg_loss, train_precision * 100, train_recall * 100, train_coverage * 100, train_auc * 100,
+                    val_avg_loss, val_precision * 100, val_recall * 100, val_coverage * 100, val_auc * 100)
+        print(report)
+        metrics['train_avg_loss'].append(train_avg_loss)
+        metrics['train_precision'].append(train_precision)
+        metrics['train_recall'].append(train_recall)
+        metrics['train_coverage'].append(train_coverage)
+        metrics['train_auc'].append(train_auc)
+        metrics['val_avg_loss'].append(val_avg_loss)
+        metrics['val_precision'].append(val_precision)
+        metrics['val_recall'].append(val_recall)
+        metrics['val_coverage'].append(val_coverage)
+        metrics['val_auc'].append(val_auc)
+
+    print(f'Finish training! Elapsed time: {dt.datetime.now() - start_time} seconds')
+    # TODO: implement saving whatever printed to console into a logfile
 
 
 parser = argparse.ArgumentParser("Graph Learning")
-parser.add_argument('--train-dir', type=str, help='Directory contains all training data')
-parser.add_argument('--valid-dir', type=str, help='Directory contains all validation data')
-parser.add_argument('--test-dir', type=str, help='Directory contains all testing data')
-parser.add_argument('--result-dir', type=str, default='examples/results', help='Directory to save everything')
-parser.add_argument('--sub-train-sample-size', type=float, default=0.1, help='Fraction to get subset of training data')
 
+# Paths
+parser.add_argument('--train-dir',  type=str, help='Directory contains all training data')
+parser.add_argument('--valid-dir',  type=str, help='Directory contains all validation data')
+parser.add_argument('--test-dir',   type=str, help='Directory contains all testing data')
+parser.add_argument('--result-dir', type=str, default='examples/results', help='Directory to save everything')
+
+# Model
+parser.add_argument('--n-layers', type=int, default=4, help='Number of layers, including embedding layer.')
+parser.add_argument('--dropout', type=float, default=0.1, help='Dropout ratio')
+parser.add_argument('--pred', type=str, default='cos', choices=['sigmoid', 'cos'], help='Prediction method')
 parser.add_argument('--out-dim', type=int, default=128, help='Output dimension')
 parser.add_argument('--hidden-dim', type=int, default=256,
                     help='Hidden dimension. Be careful! Increasing this number will increase the memory so much')
-parser.add_argument('--n-layers', type=int, default=4, help='Number of layers, including embedding layer.')
-parser.add_argument('--dropout', type=float, default=0.1, help='Dropout ratio')
-parser.add_argument('--pred', type=str, default='cos', choices=['sigmoid', 'cos'], help='Way to predict scores of link')
-parser.add_argument('--loss', type=str, default='hinge', choices=['hinge', 'bce'], help='Loss function')
+
+
+# Trainer
+parser.add_argument('--sub-train-sample-size', type=float, default=0.1, help='Fraction to get subset of training data')
 parser.add_argument('--aggregator-hetero', type=str, default='sum', choices=['mean', 'sum', 'max'],
                     help='Function to aggregate messages from different edge type')
-parser.add_argument('--aggregator-homo', type=str, default='mean', choices=['mean', 'sum', 'max'],
+parser.add_argument('--aggregator-homo', type=str, default='mean', choices=['mean', 'mean_nn', 'max_nn'],
                     help='Function to aggregate messages from same edge type')
-
+parser.add_argument('--loss', type=str, default='hinge', choices=['hinge', 'bce'], help='Loss function')
 parser.add_argument('--delta', type=float, default=0.05, help='Margin in hinge loss if used')
 parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
 parser.add_argument('--weight-decay', type=float, default=1e-5, help='Weight decay in SGD')

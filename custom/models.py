@@ -58,7 +58,7 @@ class ConvLayer(nn.Module):
         nn.init.xavier_uniform_(self.fc_self.weight, gain=gain)
         nn.init.xavier_uniform_(self.fc_neigh.weight, gain=gain)
         # nn.init.xavier_uniform_(self.fc_edge.weight, gain=gain)
-        if self._aggre_type in ['pool_nn', 'pool_nn_edge', 'mean_nn', 'mean_nn_edge']:
+        if self._aggre_type in ['max_nn', 'max_nn_edge', 'mean_nn', 'mean_nn_edge']:
             nn.init.xavier_uniform_(self.fc_preagg.weight, gain=gain)
         if self._aggre_type == 'lstm':
             self.lstm.reset_parameters()
@@ -92,7 +92,7 @@ class ConvLayer(nn.Module):
                 'mean' : messages are passed normally, and aggregated by doing the mean of all neighbor messages.
                 'mean_nn' : messages are passed through a neural network before being passed to neighbors, and
                             aggregated by doing the mean of all neighbor messages.
-                'pool_nn' : messages are passed through a neural network before being passed to neighbors, and
+                'max_nn' : messages are passed through a neural network before being passed to neighbors, and
                             aggregated by doing the max of all neighbor messages.
                 'lstm' : messages are passed normally, and aggregared using _lstm_reducer.
             All choices have also their equivalent that ends with _edge (e.g. mean_nn_edge). Those version include
@@ -109,7 +109,7 @@ class ConvLayer(nn.Module):
         self.fc_self = nn.Linear(self._in_self_feats, out_feats, bias=False)
         self.fc_neigh = nn.Linear(self._in_neigh_feats, out_feats, bias=False)
         # self.fc_edge = nn.Linear(1, 1, bias=True)  # Projecting recency days
-        if aggregator_type in ['pool_nn', 'pool_nn_edge', 'mean_nn', 'mean_nn_edge']:
+        if aggregator_type in ['max_nn', 'max_nn_edge', 'mean_nn', 'mean_nn_edge']:
             self.fc_preagg = nn.Linear(self._in_neigh_feats, self._in_neigh_feats, bias=False)
         if aggregator_type == 'lstm':
             self.lstm = nn.LSTM(self._in_neigh_feats, self._in_neigh_feats, batch_first=True)
@@ -165,7 +165,7 @@ class ConvLayer(nn.Module):
                 fn.mean('m', 'neigh'))
             h_neigh = graph.dstdata['neigh']
 
-        elif self._aggre_type == 'pool_nn':
+        elif self._aggre_type == 'max_nn':
             graph.srcdata['h'] = F.relu(self.fc_preagg(h_neigh))
             graph.update_all(
                 fn.copy_src('h', 'm'),
@@ -205,7 +205,7 @@ class ConvLayer(nn.Module):
                     fn.mean('m', 'neigh'))
             h_neigh = graph.dstdata['neigh']
 
-        elif self._aggre_type == 'pool_nn_edge':
+        elif self._aggre_type == 'max_nn_edge':
             graph.srcdata['h'] = F.relu(self.fc_preagg(h_neigh))
             if graph.canonical_etypes[0][0] in ['user', 'item'] and graph.canonical_etypes[0][2] in ['user', 'item']:
                 graph.edata['h'] = graph.edata['occurrence'].float().unsqueeze(1)
@@ -298,6 +298,10 @@ class PredictingModule(nn.Module):
         super(PredictingModule, self).__init__()
         self.layer_nn = predicting_layer(embed_dim)
 
+    def get_ratings(self, x, y):
+        cat_embed = torch.cat((x, y), 1)
+        return self.layer_nn(cat_embed)
+
     def forward(self,
                 graph,
                 h
@@ -325,6 +329,10 @@ class CosinePrediction(nn.Module):
 
     def __init__(self):
         super().__init__()
+
+    def get_ratings(self, x, y):
+        cos = nn.CosineSimilarity(dim=1, eps=1e-6)
+        return cos(x, y)
 
     def forward(self, graph, h):
         with graph.local_scope():
@@ -420,6 +428,9 @@ class ConvModel(nn.Module):
             layer = self.layers[i]
             h = layer(blocks[i], h)
         return h
+
+    def get_ratings(self, x):
+        return self.pred_fn(x)
 
     def forward(self,
                 blocks,
