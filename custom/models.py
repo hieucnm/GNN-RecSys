@@ -351,7 +351,7 @@ class ConvModel(nn.Module):
                  dim_dict,
                  norm: bool = True,
                  dropout: float = 0.0,
-                 aggregator_type: str = 'mean',
+                 aggregator_homo: str = 'mean',
                  pred: str = 'cos',
                  aggregator_hetero: str = 'sum'
                  ):
@@ -366,7 +366,7 @@ class ConvModel(nn.Module):
             Number of ConvLayer.
         dim_dict:
             Dictionary with dimension for all input nodes, hidden dimension (aka embedding dimension), output dimension.
-        norm, dropout, aggregator_type:
+        norm, dropout, aggregator_homo:
             See ConvLayer for details.
         aggregator_hetero:
             Since we are working with heterogeneous graph, all nodes will have messages coming from different types of
@@ -380,6 +380,7 @@ class ConvModel(nn.Module):
 
         """
         super().__init__()
+        self.out_dim = dim_dict['out']
 
         # input layer
         self.user_embed = NodeEmbedding(dim_dict['user'], dim_dict['hidden'], use_id=False)
@@ -391,7 +392,7 @@ class ConvModel(nn.Module):
             self.layers.append(
                 dglnn.HeteroGraphConv(
                     {etype[1]: ConvLayer((dim_dict['hidden'], dim_dict['hidden']), dim_dict['hidden'], dropout,
-                                         aggregator_type, norm)
+                                         aggregator_homo, norm)
                      for etype in g.canonical_etypes},
                     aggregate=aggregator_hetero))
 
@@ -399,13 +400,13 @@ class ConvModel(nn.Module):
         self.layers.append(
             dglnn.HeteroGraphConv(
                 {etype[1]: ConvLayer((dim_dict['hidden'], dim_dict['hidden']), dim_dict['out'], dropout,
-                                     aggregator_type, norm)
+                                     aggregator_homo, norm)
                  for etype in g.canonical_etypes},
                 aggregate=aggregator_hetero))
 
         if pred == 'cos':
             self.pred_fn = CosinePrediction()
-        elif pred == 'nn':
+        elif pred == 'sigmoid':
             self.pred_fn = PredictingModule(PredictingLayer, dim_dict['out'])
         else:
             raise KeyError('Prediction function {} not recognized.'.format(pred))
@@ -413,6 +414,8 @@ class ConvModel(nn.Module):
     def get_repr(self,
                  blocks,
                  h):
+        h['user'] = self.user_embed(h['user'])
+        h['item'] = self.item_embed(h['item'])
         for i in range(len(blocks)):
             layer = self.layers[i]
             h = layer(blocks[i], h)
@@ -456,110 +459,8 @@ class ConvModel(nn.Module):
             All score between negative examples.
 
         """
-        h['user'] = self.user_embed(h['user'])
-        h['item'] = self.item_embed(h['item'])
 
         h = self.get_repr(blocks, h)
         pos_score = self.pred_fn(pos_g, h)
         neg_score = self.pred_fn(neg_g, h)
         return h, pos_score, neg_score
-
-
-class MaxMarginLoss(nn.Module):
-    """
-        Simple max margin loss.
-
-        Parameters
-        ----------
-        pos_score:
-            All similarity scores for positive examples.
-        neg_score:
-            All similarity scores for negative examples.
-        delta:
-            Delta from which the pos_score should be higher than all its corresponding neg_score.
-        neg_sample_size:
-            Number of negative examples to generate for each positive example.
-            See main.SearchableHyperparameters for more details.
-        recency_score:
-            If not None, loss will be divided by the recency, i.e. more recent positive examples will be given a
-            greater weight in the total loss. Those are the recency, for all training edges.
-        remove_false_negative:
-            When generating negative examples, it is possible that a random negative example is actually in the graph,
-            i.e. it should not be a negative example. If true, those will be removed.
-        negative_mask:
-            For each negative example, indicator if it is a false negative or not.
-        """
-
-    def __init__(self,
-                 delta: float,
-                 neg_sample_size: int,
-                 remove_false_negative: bool = False
-                 ):
-        super().__init__()
-        self.delta = delta
-        self.remove_false_negative = remove_false_negative
-        self.neg_sample_size = neg_sample_size
-        self.relu = nn.ReLU()
-
-    def forward(self, pos_score, neg_score, **params):
-
-        recency_scores = params['recency_scores']
-        negative_mask = params['negative_mask']  # make sure this tensor already on cuda
-
-        device = pos_score[list(pos_score.keys())[0]].device
-        all_scores = torch.empty(0).to(device)
-
-        for etype in pos_score.keys():
-            neg_score_tensor = neg_score[etype]
-            pos_score_tensor = pos_score[etype]
-            neg_score_tensor = neg_score_tensor.reshape(-1, self.neg_sample_size)
-
-            if self.remove_false_negative:
-                negative_mask_tensor = negative_mask[etype].reshape(-1, self.neg_sample_size)
-            else:
-                negative_mask_tensor = torch.zeros(size=neg_score_tensor.shape).to(device)
-            scores = neg_score_tensor + self.delta - pos_score_tensor - negative_mask_tensor
-            scores = self.relu(scores)
-
-            if recency_scores is not None:
-                try:
-                    recency_scores_tensor = recency_scores[etype]
-                    scores = scores / torch.unsqueeze(recency_scores_tensor, 1)
-                except KeyError:
-                    # Not all edge types have recency. Only training edges have recency (i.e. clicks & buys)
-                    pass
-            all_scores = torch.cat((all_scores, scores), 0)
-
-        # print("scores: max = {:.3f} | min = {:.3f} | len = {}".format(
-        #     torch.max(all_scores).item(), torch.min(all_scores).item(), all_scores.shape[0]
-        # ))
-        return torch.mean(all_scores)
-
-
-class BCELossCustom(nn.Module):
-    """
-        See MaxMarginLoss for detail.
-    """
-
-    def __init__(self):
-        super().__init__()
-        self.bce = nn.BCELoss()
-
-    def forward(self, pos_score, neg_score, **params):
-        device = pos_score[list(pos_score.keys())[0]].device
-        all_scores = torch.empty(0).to(device)
-        all_labels = torch.empty(0).to(device)
-        for etype in pos_score.keys():
-            pos_score_tensor = pos_score[etype].flatten()
-            neg_score_tensor = neg_score[etype].flatten()
-            if pos_score_tensor.shape[0] == 0:
-                continue
-
-            all_scores = torch.cat((all_scores, pos_score_tensor, neg_score_tensor), dim=0)
-            all_labels = torch.cat((all_labels,
-                                    torch.ones_like(pos_score_tensor),
-                                    torch.zeros_like(neg_score_tensor)), dim=0)
-        # print("scores: max = {:.3f} | min = {:.3f} | len = {}".format(
-        #     torch.max(all_scores).item(), torch.min(all_scores).item(), all_scores.shape[0]
-        # ))
-        return self.bce(all_scores, all_labels)

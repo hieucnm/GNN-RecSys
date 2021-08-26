@@ -4,17 +4,19 @@ from custom.utils_data import create_common_ids, read_data
 
 
 class DataSet:
-    def __init__(self, args):
+    def __init__(self, data_dir):
         self.new_id_suffix = 'idx'  # e.g: `src_id` will be map to `src_id_idx`
         self.homo_data_names = ['group_chat']  # these data contains user - user interactions
 
-        self.ad_path = args.ad_path
-        self.label_path = args.label_path
-        self.group_chat_path = args.group_chat_path
-        self.user_feature_path = args.user_feature_path
+        data_dir = data_dir.rstrip('/')
+        self.ad_path = data_dir + '/ad.parquet'
+        self.label_path = data_dir + '/label.parquet'
+        self.group_chat_path = data_dir + '/group_chat.parquet'
+        self.user_feature_path = data_dir + '/user_features.parquet'
 
         self.data_dict, self.uid_map_df, self.aid_map_df = self.init_data()
         self.feature_dict = self.load_features()
+        self.label_edge_types = self.edge_triplets['label']
 
     @property
     def user_id(self):
@@ -32,6 +34,14 @@ class DataSet:
             'ad_convert': [('src_id', 'converted', 'ad_cate'), ('ad_cate', 'converted-by', 'src_id')],
             'label': [('src_id', 'will-convert', 'ad_cate')],
         }
+
+    @property
+    def num_items(self):
+        return self.aid_map_df.shape[0]
+
+    @property
+    def num_user_features(self):
+        return self.uid_map_df.shape[1]
 
     def init_data(self):
 
