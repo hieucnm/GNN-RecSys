@@ -1,10 +1,10 @@
 from typing import Tuple
 
+import dgl.function as fn
+import dgl.nn.pytorch as dglnn
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import dgl.nn.pytorch as dglnn
-import dgl.function as fn
 
 
 class NodeEmbedding(nn.Module):

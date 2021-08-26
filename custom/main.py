@@ -1,18 +1,18 @@
 import argparse
+import datetime as dt
 import os
 import warnings
+from collections import defaultdict
 
 import torch
 import torch.optim
-import datetime as dt
 
 from custom.datasets import DataSet
-from custom.utils_data import get_edge_loader, get_node_loader
-from custom.models import ConvModel
-from custom.trainers import Trainer, get_embeddings
 from custom.losses import MaxMarginLoss, BCELossCustom
 from custom.metrics import get_metrics_at_k
-from collections import defaultdict
+from custom.models import ConvModel
+from custom.trainers import Trainer, get_embeddings
+from custom.utils_data import get_edge_loader, get_node_loader
 
 warnings.filterwarnings('ignore')
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')

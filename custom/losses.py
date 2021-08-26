@@ -25,7 +25,6 @@ class MaxMarginLoss(nn.Module):
         self.relu = nn.ReLU()
 
     def forward(self, pos_score, neg_score):
-
         device = pos_score[list(pos_score.keys())[0]].device
         all_scores = torch.empty(0).to(device)
 

@@ -2,9 +2,9 @@ import os
 import pickle
 
 import dgl
-import torch
-import pandas as pd
 import numpy as np
+import pandas as pd
+import torch
 from sklearn.model_selection import train_test_split
 
 
@@ -67,6 +67,17 @@ def read_data(file_path):
     return obj
 
 
+# =========================
+# Utils for Data Loader ===
+
+def get_neighbor_sampler(n_layer, n_neighbor):
+    if n_neighbor == 0:
+        sampler = dgl.dataloading.MultiLayerFullNeighborSampler(n_layer)
+    else:
+        sampler = dgl.dataloading.MultiLayerNeighborSampler([n_neighbor] * n_layer, replace=False)
+    return sampler
+
+
 def remove_label_edges(graph, label_edge_types):
     # remove label_edge_types to avoid data leakage when aggregating
     train_eid_dict = {}
@@ -102,14 +113,6 @@ def get_edge_loader(graph,
         edge_param.update({'use_ddp': params['use_ddp']})
     train_edge_loader = dgl.dataloading.EdgeDataLoader(**edge_param)
     return train_edge_loader
-
-
-def get_neighbor_sampler(n_layer, n_neighbor):
-    if n_neighbor == 0:
-        sampler = dgl.dataloading.MultiLayerFullNeighborSampler(n_layer)
-    else:
-        sampler = dgl.dataloading.MultiLayerNeighborSampler([n_neighbor] * n_layer, replace=False)
-    return sampler
 
 
 def get_node_loader(graph, label_edge_types, item_id, sample_size=None, **params):
@@ -153,33 +156,3 @@ def get_node_loader(graph, label_edge_types, item_id, sample_size=None, **params
     }
     node_loader = dgl.dataloading.NodeDataLoader(**node_param)
     return node_loader, ground_truth
-
-
-def get_sub_train(graph, label_edge_types, sample_size):
-
-    # Get train edge ids
-    _, train_eid_dict = remove_label_edges(graph, label_edge_types)
-        
-    # Generate inference nodes for mini-train & ground truth for mini-train
-    
-    # Step 1: Choose the subsample of training set
-    # For simplicity, only use the first type train edge types, which should be `will-convert`
-    train_uid, train_iid = graph.find_edges(train_eid_dict[label_edge_types[0]], etype=label_edge_types[0])
-    unique_train_uid = np.unique(train_uid)
-    sub_train_uid = np.random.choice(unique_train_uid, int(len(unique_train_uid) * sample_size), replace=False)
-    
-    # Step 2: Fetch uid and iid of sub-train sample for all edge types
-    sub_train_uid_all = []
-    sub_train_iid_all = []
-    for e_type in train_eid_dict:
-        train_uid, train_iid = graph.find_edges(train_eid_dict[e_type], etype=e_type)
-        sub_train_eid = []
-        for i in range(len(train_eid_dict[e_type])):
-            if train_uid[i].item() in sub_train_uid:
-                sub_train_eid.append(train_eid_dict[e_type][i].item())
-        sub_train_uid, sub_train_iid = graph.find_edges(sub_train_eid, etype=e_type)
-        sub_train_uid_all.extend(sub_train_uid.tolist())
-        sub_train_iid_all.extend(sub_train_iid.tolist())
-    ground_truth_sub_train = (np.array(sub_train_uid_all), np.array(sub_train_iid_all))
-    sub_train_uid = np.array(np.unique(sub_train_uid_all))
-    return sub_train_uid, ground_truth_sub_train
