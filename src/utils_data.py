@@ -1,12 +1,12 @@
 import math
-import numpy as np
+
 import pandas as pd
 import torch
 
 from src.builder import (create_ids, df_to_adjacency_list, import_features,
                          filter_unseen_item, report_user_coverage)
-from src.utils import read_data
 from src.model import MaxMarginLoss, BCELossCustom
+from src.utils import read_data
 
 
 class DataPaths:
@@ -79,7 +79,7 @@ class FixedParameters:
         self.num_choices = 10
         self.explore = True
         self.remove_false_negative = True  # default True
-        self.remove_train_eids = False
+        self.remove_train_eids = True  # remove the edges you want to predict to avoid data leakage, default False
         self.train_on_clicks = True
         self.remove_on_inference = .7
         self.run_inference = 1
@@ -293,4 +293,3 @@ def summary_data_sets(train_eid_dict, valid_eid_dict, sub_train_uid, valid_uid, 
     print("ground_truth_sub_train.iid =", len(ground_truth_sub_train[1]))
     print("ground_truth_valid.uid     =", len(ground_truth_valid[0]))
     print("ground_truth_valid.iid     =", len(ground_truth_valid[1]))
-
