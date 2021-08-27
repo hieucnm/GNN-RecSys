@@ -440,8 +440,8 @@ class ConvModel(nn.Module):
             h = layer(blocks[i], h)
         return h
 
-    def get_ratings(self, x):
-        return self.pred_fn(x)
+    def get_ratings(self, x, y):
+        return self.pred_fn.get_ratings(x, y)
 
     def forward(self,
                 blocks,
