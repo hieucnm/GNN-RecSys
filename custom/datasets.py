@@ -41,8 +41,12 @@ class DataSet:
         return self.aid_map_df.shape[0]
 
     @property
+    def num_users(self):
+        return self.uid_map_df.shape[0]
+
+    @property
     def num_user_features(self):
-        return self.uid_map_df.shape[1]
+        return self.feature_dict[self.user_id].shape[1]
 
     def init_data(self):
 
