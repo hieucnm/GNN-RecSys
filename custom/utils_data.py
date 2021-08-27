@@ -80,10 +80,10 @@ def get_neighbor_sampler(n_layer, n_neighbor):
 
 
 def get_label_edges(graph, label_edge_types):
-    train_eid_dict = {}
+    label_eid_dict = {}
     for e_type in label_edge_types:
-        train_eid_dict[e_type] = torch.arange(graph.number_of_edges(e_type))
-    return train_eid_dict
+        label_eid_dict[e_type] = torch.arange(graph.number_of_edges(e_type))
+    return label_eid_dict
 
 
 # noinspection SpellCheckingInspection
@@ -99,19 +99,21 @@ def remove_label_edges(graph, label_edge_types):
     -------
 
     """
-    # Old method: clone then remove. Issue: remove edge_ids but edge_name still remain
-    # adjust_graph = graph.clone()
-    # for e_type in label_edge_types:
-    #     label_edge_ids = torch.arange(graph.number_of_edges(e_type))
-    #     adjust_graph.remove_edges(label_edge_ids, etype=e_type)
+    # Method 1: clone then remove.
+    # Issue: remove edge_ids but edge_name still remain
+    adjust_graph = graph.clone()
+    for e_type in label_edge_types:
+        label_edge_ids = torch.arange(graph.number_of_edges(e_type))
+        adjust_graph.remove_edges(label_edge_ids, etype=e_type)
 
-    # New method: migrate edges to new graph except the label ones
-    adjust_schema = {}
-    for edge_type in graph.canonical_etypes:
-        if edge_type not in label_edge_types:
-            src_nodes, dst_nodes, _ = graph.edges(form='all', etype=edge_type)
-            adjust_schema[edge_type] = (src_nodes, dst_nodes)
-    adjust_graph = heterograph(adjust_schema)
+    # Method 2: migrate edges to new graph except the label ones.
+    # Issue: `graph` & `adjust_graph` have different schema, which raise error
+    # adjust_schema = {}
+    # for edge_type in graph.canonical_etypes:
+    #     if edge_type not in label_edge_types:
+    #         src_nodes, dst_nodes, _ = graph.edges(form='all', etype=edge_type)
+    #         adjust_schema[edge_type] = (src_nodes, dst_nodes)
+    # adjust_graph = heterograph(adjust_schema)
     return adjust_graph
 
 
@@ -146,6 +148,7 @@ def get_node_loader(graph,
                     adjust_graph,
                     label_eid_dict,
                     label_edge_types,
+                    user_id,
                     item_id,
                     sample_size=None,
                     **params):
@@ -153,6 +156,7 @@ def get_node_loader(graph,
     Get node loader for given edge_types, and corresponding ground truth
     Parameters
     ----------
+    user_id
     graph
     adjust_graph
     label_eid_dict
@@ -181,7 +185,7 @@ def get_node_loader(graph,
     sampler = get_neighbor_sampler(n_layer=params['n_layers'] - 1, n_neighbor=params['num_neighbors'])
     node_param = {
         'g': adjust_graph,
-        'nids': {'user': unique_user_nodes, 'item': unique_item_nodes},
+        'nids': {user_id: unique_user_nodes, item_id: unique_item_nodes},
         'block_sampler': sampler,
         'batch_size': params['node_batch_size'],
         'shuffle': False,
