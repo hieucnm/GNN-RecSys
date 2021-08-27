@@ -1,6 +1,7 @@
 import argparse
 import datetime as dt
 import os
+import sys
 import warnings
 from collections import defaultdict
 
@@ -13,6 +14,7 @@ from custom.metrics import get_metrics_at_k
 from custom.models import ConvModel
 from custom.trainers import Trainer, get_embeddings
 from custom.utils_data import get_edge_loader, get_node_loader
+from custom.logger import Logger
 
 warnings.filterwarnings('ignore')
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -20,10 +22,10 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 def main():
 
+    # Redirect print to both console and log file
     timestamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
     result_dir = f'{args.result_dir}/{timestamp}'
-    os.makedirs(result_dir)
-    log_filepath = f'{result_dir}/running_log.txt'
+    sys.stdout = Logger(f'{result_dir}/running_log.txt')
 
     train_data = DataSet(data_dir=args.train_dir)
     train_graph = train_data.init_graph()
@@ -163,7 +165,6 @@ def main():
         metrics['val_auc'].append(val_auc)
 
     print(f'Finish training! Elapsed time: {dt.datetime.now() - start_time} seconds')
-    # TODO: implement saving whatever printed to console into a logfile
 
 
 parser = argparse.ArgumentParser("Graph Learning")
