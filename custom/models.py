@@ -354,7 +354,7 @@ class ConvModel(nn.Module):
     """
 
     def __init__(self,
-                 g,
+                 graph,
                  n_layers: int,
                  dim_dict,
                  norm: bool = True,
@@ -368,7 +368,7 @@ class ConvModel(nn.Module):
 
         Parameters
         ----------
-        g:
+        graph:
             Graph, only used to query graph metastructure (fetch node types and edge types).
         n_layers:
             Number of ConvLayer.
@@ -401,7 +401,7 @@ class ConvModel(nn.Module):
                 dglnn.HeteroGraphConv(
                     {etype[1]: ConvLayer((dim_dict['hidden'], dim_dict['hidden']), dim_dict['hidden'], dropout,
                                          aggregator_homo, norm)
-                     for etype in g.canonical_etypes},
+                     for etype in graph.canonical_etypes},
                     aggregate=aggregator_hetero))
 
         # output layer
@@ -409,7 +409,7 @@ class ConvModel(nn.Module):
             dglnn.HeteroGraphConv(
                 {etype[1]: ConvLayer((dim_dict['hidden'], dim_dict['hidden']), dim_dict['out'], dropout,
                                      aggregator_homo, norm)
-                 for etype in g.canonical_etypes},
+                 for etype in graph.canonical_etypes},
                 aggregate=aggregator_hetero))
 
         if pred == 'cos':

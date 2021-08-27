@@ -5,6 +5,7 @@ import dgl
 import numpy as np
 import pandas as pd
 import torch
+from dgl import heterograph
 from sklearn.model_selection import train_test_split
 
 
@@ -78,28 +79,54 @@ def get_neighbor_sampler(n_layer, n_neighbor):
     return sampler
 
 
-def remove_label_edges(graph, label_edge_types):
-    # remove label_edge_types to avoid data leakage when aggregating
+def get_label_edges(graph, label_edge_types):
     train_eid_dict = {}
-    train_graph = graph.clone()
     for e_type in label_edge_types:
         train_eid_dict[e_type] = torch.arange(graph.number_of_edges(e_type))
-        train_graph.remove_edges(train_eid_dict[e_type], etype=e_type)
-    return train_graph, train_eid_dict
+    return train_eid_dict
+
+
+# noinspection SpellCheckingInspection
+def remove_label_edges(graph, label_edge_types):
+    """
+    Remove label_edge_types to avoid data leakage when aggregating
+    Parameters
+    ----------
+    graph
+    label_edge_types
+
+    Returns
+    -------
+
+    """
+    # Old method: clone then remove. Issue: remove edge_ids but edge_name still remain
+    # adjust_graph = graph.clone()
+    # for e_type in label_edge_types:
+    #     label_edge_ids = torch.arange(graph.number_of_edges(e_type))
+    #     adjust_graph.remove_edges(label_edge_ids, etype=e_type)
+
+    # New method: migrate edges to new graph except the label ones
+    adjust_schema = {}
+    for edge_type in graph.canonical_etypes:
+        if edge_type not in label_edge_types:
+            src_nodes, dst_nodes, _ = graph.edges(form='all', etype=edge_type)
+            adjust_schema[edge_type] = (src_nodes, dst_nodes)
+    adjust_graph = heterograph(adjust_schema)
+    return adjust_graph
 
 
 def get_edge_loader(graph,
-                    label_edge_types,
+                    adjust_graph,
+                    label_eid_dict,
                     **params,
                     ):
-    train_graph, train_eid_dict = remove_label_edges(graph, label_edge_types)
     sampler = get_neighbor_sampler(n_layer=params['n_layers'] - 1, n_neighbor=params['num_neighbors'])
     sampler_n = dgl.dataloading.negative_sampler.Uniform(params['neg_sample_size'])
 
     edge_param = {
         'g': graph,
-        'eids': train_eid_dict,
-        'g_sampling': train_graph,
+        'eids': label_eid_dict,
+        'g_sampling': adjust_graph,
         'block_sampler': sampler,
         'negative_sampler': sampler_n,
         'batch_size': params['edge_batch_size'],
@@ -115,12 +142,20 @@ def get_edge_loader(graph,
     return train_edge_loader
 
 
-def get_node_loader(graph, label_edge_types, item_id, sample_size=None, **params):
+def get_node_loader(graph,
+                    adjust_graph,
+                    label_eid_dict,
+                    label_edge_types,
+                    item_id,
+                    sample_size=None,
+                    **params):
     """
     Get node loader for given edge_types, and corresponding ground truth
     Parameters
     ----------
     graph
+    adjust_graph
+    label_eid_dict
     label_edge_types
     sample_size
     item_id
@@ -130,11 +165,10 @@ def get_node_loader(graph, label_edge_types, item_id, sample_size=None, **params
     -------
 
     """
-    train_graph, train_eid_dict = remove_label_edges(graph, label_edge_types)
     all_user_nodes = []
     all_item_nodes = []
     for edge_type in label_edge_types:
-        user_nodes, item_nodes = graph.find_edges(train_eid_dict[edge_type], etype=edge_type)
+        user_nodes, item_nodes = graph.find_edges(label_eid_dict[edge_type], etype=edge_type)
         if sample_size is not None:
             # TODO: stratified split by item_nodes (`ad_cate`)
             _, user_nodes, _, item_nodes = train_test_split(user_nodes, item_nodes, test_size=sample_size)
@@ -146,7 +180,7 @@ def get_node_loader(graph, label_edge_types, item_id, sample_size=None, **params
 
     sampler = get_neighbor_sampler(n_layer=params['n_layers'] - 1, n_neighbor=params['num_neighbors'])
     node_param = {
-        'g': train_graph,
+        'g': adjust_graph,
         'nids': {'user': unique_user_nodes, 'item': unique_item_nodes},
         'block_sampler': sampler,
         'batch_size': params['node_batch_size'],

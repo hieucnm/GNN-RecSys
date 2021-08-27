@@ -30,7 +30,7 @@ class DataSet:
     @property
     def edge_triplets(self):
         return {
-            'group_chat': [('src_id', 'group-chat-to', 'group_id'), ('group_id', 'group-chat-by', 'src_id')],
+            'group_chat': [('src_id', 'group-chat-to', 'src_id'), ('src_id', 'group-chat-by', 'src_id')],
             'ad_click': [('src_id', 'clicked', 'ad_cate'), ('ad_cate', 'clicked-by', 'src_id')],
             'ad_convert': [('src_id', 'converted', 'ad_cate'), ('ad_cate', 'converted-by', 'src_id')],
             'label': [('src_id', 'will-convert', 'ad_cate')],
