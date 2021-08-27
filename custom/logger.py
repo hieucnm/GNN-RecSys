@@ -1,6 +1,7 @@
 import os
 import sys
 import os.path as osp
+import datetime as dt
 
 
 def mkdir_if_missing(path: str, _type: str = 'path'):
@@ -33,6 +34,8 @@ class Logger(object):
         self.close()
 
     def write(self, msg):
+        timestamp = dt.datetime.now().replace(microsecond=0)
+        msg = f'[{timestamp}] {msg}'
         self.console.write(msg)
         if self.file is not None:
             self.file.write(msg)
