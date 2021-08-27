@@ -47,23 +47,26 @@ def main():
                                         num_workers=args.num_workers,
                                         use_ddp=args.use_ddp
                                         )
-    sub_train_node_loader, sub_train_ground_truth = get_node_loader(graph=train_graph,
-                                                                    adjust_graph=train_adjust_graph,
-                                                                    label_eid_dict=train_label_eid,
-                                                                    label_edge_types=label_edge_types,
-                                                                    item_id=train_data.item_id,
-                                                                    sample_size=args.sub_train_sample_size,
-                                                                    num_neighbors=args.num_neighbors,
-                                                                    n_layers=args.n_layers,
-                                                                    node_batch_size=args.node_batch_size,
-                                                                    num_workers=args.num_workers
-                                                                    )
+    # sub_train_node_loader, sub_train_ground_truth = get_node_loader(graph=train_graph,
+    #                                                                 adjust_graph=train_adjust_graph,
+    #                                                                 label_eid_dict=train_label_eid,
+    #                                                                 label_edge_types=label_edge_types,
+    #                                                                 user_id=train_data.user_id,
+    #                                                                 item_id=train_data.item_id,
+    #                                                                 sample_size=args.sub_train_sample_size,
+    #                                                                 num_neighbors=args.num_neighbors,
+    #                                                                 n_layers=args.n_layers,
+    #                                                                 node_batch_size=args.node_batch_size,
+    #                                                                 num_workers=args.num_workers
+    #                                                                 )
 
     print("Loading validation data ...")
     valid_data = DataSet(data_dir=args.valid_dir)
     valid_graph = valid_data.init_graph()
+    label_edge_types = valid_data.label_edge_types
     valid_label_eid = get_label_edges(graph=valid_graph, label_edge_types=label_edge_types)
     valid_adjust_graph = remove_label_edges(graph=valid_graph, label_edge_types=label_edge_types)
+
     valid_edge_loader = get_edge_loader(graph=valid_graph,
                                         adjust_graph=valid_adjust_graph,
                                         label_eid_dict=valid_label_eid,
@@ -74,56 +77,60 @@ def main():
                                         num_workers=args.num_workers,
                                         use_ddp=args.use_ddp
                                         )
-    valid_node_loader, valid_ground_truth = get_node_loader(graph=valid_graph,
-                                                            adjust_graph=valid_adjust_graph,
-                                                            label_eid_dict=valid_label_eid,
-                                                            label_edge_types=label_edge_types,
-                                                            item_id=valid_data.item_id,
-                                                            num_neighbors=args.num_neighbors,
-                                                            n_layers=args.n_layers,
-                                                            node_batch_size=args.node_batch_size,
-                                                            num_workers=args.num_workers
-                                                            )
+    # valid_node_loader, valid_ground_truth = get_node_loader(graph=valid_graph,
+    #                                                         adjust_graph=valid_adjust_graph,
+    #                                                         label_eid_dict=valid_label_eid,
+    #                                                         label_edge_types=label_edge_types,
+    #                                                         user_id=valid_data.user_id,
+    #                                                         item_id=valid_data.item_id,
+    #                                                         num_neighbors=args.num_neighbors,
+    #                                                         n_layers=args.n_layers,
+    #                                                         node_batch_size=args.node_batch_size,
+    #                                                         num_workers=args.num_workers
+    #                                                         )
 
-    # print("Creating model ...")
-    #
-    # dim_dict = {'user': train_data.num_user_features,
-    #             'item': train_data.num_items,
-    #             'out': args.out_dim,
-    #             'hidden': args.hidden_dim}
-    #
-    # # We want the model to not contain the label edges
-    # model = ConvModel(graph=train_adjust_graph,
-    #                   dim_dict=dim_dict,
-    #                   n_layers=args.n_layers,
-    #                   pred=args.pred,
-    #                   norm=True,
-    #                   dropout=args.dropout,
-    #                   aggregator_homo=args.aggregator_homo,
-    #                   aggregator_hetero=args.aggregator_hetero
-    #                   )
-    # if device.type != 'cpu':
-    #     model = model.to(device)
-    # print(model.eval())
+    print("Creating model ...")
 
-    # criterion = MaxMarginLoss(delta=args.delta) if args.loss == 'hinge' else BCELossCustom()
-    # optimizer = torch.optim.Adam(params=model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
-    # trainer = Trainer(model=model,
-    #                   optimizer=optimizer,
-    #                   criterion=criterion,
-    #                   device=device,
-    #                   print_every=args.print_every
-    #                   )
-    #
-    # # TRAIN
-    # metrics = defaultdict(list)
-    # start_time = dt.datetime.now()
-    # print('Start training:')
-    # for epoch in range(args.num_epochs):
-    #
-    #     print('--> Epoch {}/{}: Training ...'.format(epoch, args.num_epochs))
-    #     train_avg_loss = trainer.train(train_edge_loader)
-    #
+    dim_dict = {'user': train_data.num_user_features,
+                'item': train_data.num_items,
+                'out': args.out_dim,
+                'hidden': args.hidden_dim}
+
+    # We want the model to not contain the label edges
+    model = ConvModel(graph=train_adjust_graph,
+                      dim_dict=dim_dict,
+                      label_edge_types=label_edge_types,
+                      n_layers=args.n_layers,
+                      pred=args.pred,
+                      norm=True,
+                      dropout=args.dropout,
+                      aggregator_homo=args.aggregator_homo,
+                      aggregator_hetero=args.aggregator_hetero,
+                      user_id=train_data.user_id,
+                      item_id=train_data.item_id
+                      )
+    if device.type != 'cpu':
+        model = model.to(device)
+    print(model.eval())
+
+    criterion = MaxMarginLoss(delta=args.delta) if args.loss == 'hinge' else BCELossCustom()
+    optimizer = torch.optim.Adam(params=model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+    trainer = Trainer(model=model,
+                      optimizer=optimizer,
+                      criterion=criterion,
+                      device=device,
+                      print_every=args.print_every
+                      )
+
+    # TRAIN
+    metrics = defaultdict(list)
+    start_time = dt.datetime.now()
+    print('Start training:')
+    for epoch in range(args.num_epochs):
+
+        print('--> Epoch {}/{}: Training ...'.format(epoch, args.num_epochs))
+        train_avg_loss = trainer.train(train_edge_loader)
+
     #     torch.save(model.state_dict(), f'{result_dir}/model_ep_{epoch}.pth')
     #     print("--> Model saved!")
     #
@@ -216,13 +223,13 @@ parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
 parser.add_argument('--weight-decay', type=float, default=1e-5, help='Weight decay in SGD')
 parser.add_argument('--num-epochs', type=int, default=3, help='Number of epochs')
 parser.add_argument('--print-every', type=int, default=10, help='Print loss every these iterations')
-parser.add_argument('--neg-sample-size', type=int, default=3, help='Number of samples when doing negative sampling')
-parser.add_argument('--edge-batch-size', type=int, default=1024, help='Number of edges in a train / validation batch')
-parser.add_argument('--node-batch-size', type=int, default=1024, help='Number of nodes in a train / validation batch')
+parser.add_argument('--neg-sample-size', type=int, default=4, help='Number of samples when doing negative sampling')
+parser.add_argument('--edge-batch-size', type=int, default=64, help='Number of edges in a batch')
+parser.add_argument('--node-batch-size', type=int, default=64, help='Number of nodes in a batch')
 parser.add_argument('--precision-at-k', type=int, default=5, help='Precision/Recall at this number will be computed')
 parser.add_argument('--num-workers', type=int, default=8, help='Number of cores of CPU to use')
 parser.add_argument('--use-ddp', action='store_true', default=False, help='Only use for multi-GPU')
-parser.add_argument('--num-neighbors', type=int, default=512,
+parser.add_argument('--num-neighbors', type=int, default=256,
                     help='Number of random neighbors to aggregate. '
                          'Set 0 to use all neighbors, but not recommended because the memory will explode. '
                          'For now we use the same number for all layers. '

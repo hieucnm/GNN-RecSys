@@ -355,13 +355,16 @@ class ConvModel(nn.Module):
 
     def __init__(self,
                  graph,
-                 n_layers: int,
                  dim_dict,
+                 user_id: str,
+                 item_id: str,
+                 pred: str,
+                 aggregator_homo: str,
+                 aggregator_hetero: str,
+                 n_layers: int,
+                 label_edge_types,
                  norm: bool = True,
                  dropout: float = 0.0,
-                 aggregator_homo: str = 'mean',
-                 pred: str = 'cos',
-                 aggregator_hetero: str = 'sum'
                  ):
         """
         Initialize the ConvModel.
@@ -381,14 +384,11 @@ class ConvModel(nn.Module):
             nodes. However, the neighborhood messages are specific to a node type. Thus, we have to aggregate
             neighborhood messages from different edge types.
             Choices are 'mean', 'sum', 'max'.
-        embedding_layer:
-            Some GNN papers explicitly define an embedding layer, whereas other papers consider the first ConvLayer
-            as the "embedding" layer. If true, an explicit embedding layer will be defined (using NodeEmbedding). If
-            false, the first ConvLayer will have input dimensions equal to node features.
-
         """
         super().__init__()
         self.out_dim = dim_dict['out']
+        self.user_id = user_id
+        self.item_id = item_id
 
         # input layer
         self.user_embed = NodeEmbedding(dim_dict['user'], dim_dict['hidden'], use_id=False)
@@ -397,20 +397,30 @@ class ConvModel(nn.Module):
         self.layers = nn.ModuleList()
         # hidden layers
         for i in range(n_layers - 2):
-            self.layers.append(
-                dglnn.HeteroGraphConv(
-                    {etype[1]: ConvLayer((dim_dict['hidden'], dim_dict['hidden']), dim_dict['hidden'], dropout,
-                                         aggregator_homo, norm)
-                     for etype in graph.canonical_etypes},
-                    aggregate=aggregator_hetero))
+            self.layers.append(dglnn.HeteroGraphConv({
+                edge_type[1]:
+                    ConvLayer(
+                         in_feats=(dim_dict['hidden'], dim_dict['hidden']),
+                         out_feats=dim_dict['hidden'],
+                         dropout=dropout,
+                         aggregator_type=aggregator_homo,
+                         norm=norm)
+                for edge_type in graph.canonical_etypes if edge_type not in label_edge_types},
+                aggregate=aggregator_hetero
+            ))
 
         # output layer
-        self.layers.append(
-            dglnn.HeteroGraphConv(
-                {etype[1]: ConvLayer((dim_dict['hidden'], dim_dict['hidden']), dim_dict['out'], dropout,
-                                     aggregator_homo, norm)
-                 for etype in graph.canonical_etypes},
-                aggregate=aggregator_hetero))
+        self.layers.append(dglnn.HeteroGraphConv({
+            e_type[1]:
+                ConvLayer(
+                    in_feats=(dim_dict['hidden'], dim_dict['hidden']),
+                    out_feats=dim_dict['out'],
+                    dropout=dropout,
+                    aggregator_type=aggregator_homo,
+                    norm=norm)
+            for e_type in graph.canonical_etypes if e_type not in label_edge_types},
+            aggregate=aggregator_hetero
+        ))
 
         if pred == 'cos':
             self.pred_fn = CosinePrediction()
@@ -422,8 +432,8 @@ class ConvModel(nn.Module):
     def get_repr(self,
                  blocks,
                  h):
-        h['user'] = self.user_embed(h['user'])
-        h['item'] = self.item_embed(h['item'])
+        h[self.user_id] = self.user_embed(h[self.user_id])
+        h[self.item_id] = self.item_embed(h[self.item_id])
         for i in range(len(blocks)):
             layer = self.layers[i]
             h = layer(blocks[i], h)
