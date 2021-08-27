@@ -252,31 +252,27 @@ class PredictingLayer(nn.Module):
     """
     Scoring function that uses a neural network to compute similarity between user and item.
 
-    Only used if fixed_params.pred == 'nn'.
+    Only used if fixed_params.pred == 'sigmoid'.
     Given the concatenated hidden states of heads and tails vectors, passes them through neural network and
     returns sigmoid ratings.
     """
 
     def reset_parameters(self):
         gain_relu = nn.init.calculate_gain('relu')
+        nn.init.xavier_uniform_(self.hidden.weight, gain=gain_relu)
         gain_sigmoid = nn.init.calculate_gain('sigmoid')
-        nn.init.xavier_uniform_(self.hidden_1.weight, gain=gain_relu)
-        nn.init.xavier_uniform_(self.hidden_2.weight, gain=gain_relu)
         nn.init.xavier_uniform_(self.output.weight, gain=gain_sigmoid)
 
     def __init__(self, embed_dim: int):
         super(PredictingLayer, self).__init__()
-        self.hidden_1 = nn.Linear(embed_dim * 2, 128)
-        self.hidden_2 = nn.Linear(128, 32)
+        self.hidden = nn.Linear(embed_dim * 2, 32)
         self.output = nn.Linear(32, 1)
         self.relu = nn.ReLU()
         self.sigmoid = nn.Sigmoid()
         self.reset_parameters()
 
     def forward(self, x):
-        x = self.hidden_1(x)
-        x = self.relu(x)
-        x = self.hidden_2(x)
+        x = self.hidden(x)
         x = self.relu(x)
         x = self.output(x)
         x = self.sigmoid(x)
@@ -294,9 +290,14 @@ class PredictingModule(nn.Module):
         - Returns ratings (sigmoid function).
     """
 
-    def __init__(self, predicting_layer, embed_dim: int):
+    def __init__(self,
+                 predicting_layer,
+                 embed_dim: int,
+                 train_nodes,
+                 ):
         super(PredictingModule, self).__init__()
         self.layer_nn = predicting_layer(embed_dim)
+        self.train_nodes = train_nodes
 
     def get_ratings(self, x, y):
         cat_embed = torch.cat((x, y), 1)
@@ -307,15 +308,15 @@ class PredictingModule(nn.Module):
                 h
                 ):
         ratings_dict = {}
-        for etype in graph.canonical_etypes:
-            if etype[0] in ['user', 'item'] and etype[2] in ['user', 'item']:
-                utype, _, vtype = etype
-                src_nid, dst_nid = graph.all_edges(etype=etype)
-                emb_heads = h[utype][src_nid]
-                emb_tails = h[vtype][dst_nid]
-                cat_embed = torch.cat((emb_heads, emb_tails), 1)
+        for edge_type in graph.canonical_etypes:
+            src_node, _, dst_node = edge_type
+            if src_node in self.train_nodes and dst_node in self.train_nodes:
+                src_nid, dst_nid = graph.all_edges(etype=edge_type)
+                src_emb = h[src_node][src_nid]
+                dst_emb = h[dst_node][dst_nid]
+                cat_embed = torch.cat((src_emb, dst_emb), 1)
                 ratings = self.layer_nn(cat_embed)
-                ratings_dict[etype] = torch.flatten(ratings)
+                ratings_dict[edge_type] = torch.flatten(ratings)
         ratings_dict = {key: torch.unsqueeze(ratings_dict[key], 1) for key in ratings_dict.keys()}
         return ratings_dict
 
@@ -425,7 +426,7 @@ class ConvModel(nn.Module):
         if pred == 'cos':
             self.pred_fn = CosinePrediction()
         elif pred == 'sigmoid':
-            self.pred_fn = PredictingModule(PredictingLayer, dim_dict['out'])
+            self.pred_fn = PredictingModule(PredictingLayer, dim_dict['out'], (user_id, item_id))
         else:
             raise KeyError('Prediction function {} not recognized.'.format(pred))
 
