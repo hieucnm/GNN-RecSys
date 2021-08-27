@@ -29,9 +29,13 @@ class MaxMarginLoss(nn.Module):
         all_scores = torch.empty(0).to(device)
 
         for edge_type in pos_score.keys():
-            neg_score_tensor = neg_score[edge_type]
             pos_score_tensor = pos_score[edge_type]
-            neg_score_tensor = neg_score_tensor.reshape(-1, self.neg_sample_size)
+            neg_score_tensor = neg_score[edge_type]
+            if pos_score_tensor.shape[0] == 0:
+                # we don't train this edge
+                continue
+
+            neg_score_tensor = neg_score_tensor.reshape(pos_score_tensor.shape[0], -1)
             scores = neg_score_tensor + self.delta - pos_score_tensor
             scores = self.relu(scores)
             all_scores = torch.cat((all_scores, scores), 0)
@@ -55,10 +59,11 @@ class BCELossCustom(nn.Module):
         device = pos_score[list(pos_score.keys())[0]].device
         all_scores = torch.empty(0).to(device)
         all_labels = torch.empty(0).to(device)
-        for etype in pos_score.keys():
-            pos_score_tensor = pos_score[etype].flatten()
-            neg_score_tensor = neg_score[etype].flatten()
+        for e_type in pos_score.keys():
+            pos_score_tensor = pos_score[e_type].flatten()
+            neg_score_tensor = neg_score[e_type].flatten()
             if pos_score_tensor.shape[0] == 0:
+                # we don't train this edge
                 continue
 
             all_scores = torch.cat((all_scores, pos_score_tensor, neg_score_tensor), dim=0)
