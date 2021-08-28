@@ -387,7 +387,7 @@ class ConvModel(nn.Module):
             Choices are 'mean', 'sum', 'max'.
         """
         super().__init__()
-        self.out_dim = dim_dict['out']
+        self.embed_dim = dim_dict['out']
         self.user_id = user_id
         self.item_id = item_id
 

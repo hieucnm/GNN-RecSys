@@ -12,12 +12,14 @@ from custom.datasets import DataSet
 from custom.losses import MaxMarginLoss, BCELossCustom
 from custom.metrics import get_metrics_at_k
 from custom.models import ConvModel
-from custom.trainers import Trainer, get_embeddings
+from custom.trainers import Trainer
+from custom.evaluation import Evaluator
 from custom.utils_data import get_edge_loader, get_node_loader, remove_label_edges, get_label_edges
 from custom.logger import Logger
 
 warnings.filterwarnings('ignore')
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+# device = torch.device('cpu')  # to debug
 
 
 def main():
@@ -47,18 +49,18 @@ def main():
                                         num_workers=args.num_workers,
                                         use_ddp=args.use_ddp
                                         )
-    # sub_train_node_loader, sub_train_ground_truth = get_node_loader(graph=train_graph,
-    #                                                                 adjust_graph=train_adjust_graph,
-    #                                                                 label_eid_dict=train_label_eid,
-    #                                                                 label_edge_types=label_edge_types,
-    #                                                                 user_id=train_data.user_id,
-    #                                                                 item_id=train_data.item_id,
-    #                                                                 sample_size=args.sub_train_sample_size,
-    #                                                                 num_neighbors=args.num_neighbors,
-    #                                                                 n_layers=args.n_layers,
-    #                                                                 node_batch_size=args.node_batch_size,
-    #                                                                 num_workers=args.num_workers
-    #                                                                 )
+    sub_train_node_loader, sub_train_ground_truth = get_node_loader(graph=train_graph,
+                                                                    adjust_graph=train_adjust_graph,
+                                                                    label_eid_dict=train_label_eid,
+                                                                    label_edge_types=label_edge_types,
+                                                                    user_id=train_data.user_id,
+                                                                    item_id=train_data.item_id,
+                                                                    sample_size=args.sub_train_sample_size,
+                                                                    num_neighbors=args.num_neighbors,
+                                                                    n_layers=args.n_layers,
+                                                                    node_batch_size=args.node_batch_size,
+                                                                    num_workers=args.num_workers
+                                                                    )
 
     print("Loading validation data ...")
     valid_data = DataSet(data_dir=args.valid_dir)
@@ -77,20 +79,18 @@ def main():
                                         num_workers=args.num_workers,
                                         use_ddp=args.use_ddp
                                         )
-    # valid_node_loader, valid_ground_truth = get_node_loader(graph=valid_graph,
-    #                                                         adjust_graph=valid_adjust_graph,
-    #                                                         label_eid_dict=valid_label_eid,
-    #                                                         label_edge_types=label_edge_types,
-    #                                                         user_id=valid_data.user_id,
-    #                                                         item_id=valid_data.item_id,
-    #                                                         num_neighbors=args.num_neighbors,
-    #                                                         n_layers=args.n_layers,
-    #                                                         node_batch_size=args.node_batch_size,
-    #                                                         num_workers=args.num_workers
-    #                                                         )
-
+    valid_node_loader, valid_ground_truth = get_node_loader(graph=valid_graph,
+                                                            adjust_graph=valid_adjust_graph,
+                                                            label_eid_dict=valid_label_eid,
+                                                            label_edge_types=label_edge_types,
+                                                            user_id=valid_data.user_id,
+                                                            item_id=valid_data.item_id,
+                                                            num_neighbors=args.num_neighbors,
+                                                            n_layers=args.n_layers,
+                                                            node_batch_size=args.node_batch_size,
+                                                            num_workers=args.num_workers
+                                                            )
     print("Creating model ...")
-
     dim_dict = {'user': train_data.num_user_features,
                 'item': train_data.num_items,
                 'out': args.out_dim,
@@ -121,77 +121,62 @@ def main():
                       device=device,
                       print_every=args.print_every
                       )
+    evaluator = Evaluator(model=model,
+                          k=args.precision_at_k,
+                          user_id=train_data.user_id,
+                          item_id=train_data.item_id,
+                          print_every=args.print_every
+                          )
 
     # TRAIN
     metrics = defaultdict(list)
     start_time = dt.datetime.now()
     print('Start training:')
-    for epoch in range(args.num_epochs):
+    for epoch in range(1, args.num_epochs + 1):
 
         print('--> Epoch {}/{}: Training ...'.format(epoch, args.num_epochs))
         train_avg_loss = trainer.train(train_edge_loader)
 
-    #     torch.save(model.state_dict(), f'{result_dir}/model_ep_{epoch}.pth')
-    #     print("--> Model saved!")
-    #
-    #     print('--> Epoch {}/{}: Extracting sub-train embeddings ...'.format(epoch, args.num_epochs))
-    #     embed_dict = get_embeddings(model=model,
-    #                                 graph=train_graph,
-    #                                 node_loader=sub_train_node_loader,
-    #                                 embed_dim=dim_dict['out'],
-    #                                 print_every=args.print_every
-    #                                 )
-    #     print('--> Epoch {}/{}: Calculating sub-train metrics ...'.format(epoch, args.num_epochs))
-    #     train_precision, train_recall, train_coverage, train_auc = get_metrics_at_k(
-    #         embed_dict=embed_dict,
-    #         ground_truth=sub_train_ground_truth,
-    #         model=model,
-    #         num_unique_items=train_graph.num_nodes(train_data.item_id),
-    #         k=args.precision_at_k,
-    #         user_id=train_data.user_id,
-    #         item_id=train_data.item_id,
-    #     )
-    #
-    #     print('--> Epoch {}/{}: Calculating validation loss ...'.format(epoch, args.num_epochs))
-    #     val_avg_loss = trainer.calculate_loss(valid_edge_loader)
-    #
-    #     print('--> Epoch {}/{}: Extracting validation embeddings '.format(epoch, args.num_epochs))
-    #     embed_dict = get_embeddings(model=model,
-    #                                 graph=valid_graph,
-    #                                 node_loader=valid_node_loader,
-    #                                 embed_dim=dim_dict['out'],
-    #                                 print_every=args.print_every
-    #                                 )
-    #     print('--> Epoch {}/{}: Calculating validation metrics ...'.format(epoch, args.num_epochs))
-    #     val_precision, val_recall, val_coverage, val_auc = get_metrics_at_k(
-    #         embed_dict=embed_dict,
-    #         ground_truth=valid_ground_truth,
-    #         model=model,
-    #         num_unique_items=valid_graph.num_nodes(train_data.item_id),
-    #         k=args.precision_at_k,
-    #         user_id=train_data.user_id,
-    #         item_id=train_data.item_id,
-    #     )
-    #
-    #     report = "--> Finish epoch {:02d}/{:02d} " \
-    #              "|| Training Loss {:.5f} | Precision {:.3f}% | Recall {:.3f}% | Coverage {:.2f} | AUC {:.2f}% " \
-    #              "|| Validation Loss {:.5f} | Precision {:.3f}% | Recall {:.3f}% | Coverage {:.2f}% | AUC {:.2f}%"\
-    #         .format(epoch, args.num_epochs,
-    #                 train_avg_loss, train_precision * 100, train_recall * 100, train_coverage * 100, train_auc * 100,
-    #                 val_avg_loss, val_precision * 100, val_recall * 100, val_coverage * 100, val_auc * 100)
-    #     print(report)
-    #     metrics['train_avg_loss'].append(train_avg_loss)
-    #     metrics['train_precision'].append(train_precision)
-    #     metrics['train_recall'].append(train_recall)
-    #     metrics['train_coverage'].append(train_coverage)
-    #     metrics['train_auc'].append(train_auc)
-    #     metrics['val_avg_loss'].append(val_avg_loss)
-    #     metrics['val_precision'].append(val_precision)
-    #     metrics['val_recall'].append(val_recall)
-    #     metrics['val_coverage'].append(val_coverage)
-    #     metrics['val_auc'].append(val_auc)
-    #
-    # print(f'Finish training! Elapsed time: {dt.datetime.now() - start_time} seconds')
+        # torch.save(model.state_dict(), f'{result_dir}/model_ep_{epoch}.pth')
+        # print(f"--> Model at epoch {epoch} saved!")
+
+        print('--> Epoch {}/{}: Evaluating sub-train ...'.format(epoch, args.num_epochs))
+        train_precision, train_recall, train_coverage, train_auc = evaluator.evaluate_on_batches(
+            graph=train_graph,
+            node_loader=sub_train_node_loader,
+            ground_truth=sub_train_ground_truth
+        )
+
+        print('--> Epoch {}/{}: Calculating validation loss ...'.format(epoch, args.num_epochs))
+        val_avg_loss = trainer.calculate_loss(valid_edge_loader)
+
+        print('--> Epoch {}/{}: Evaluating validation ...'.format(epoch, args.num_epochs))
+        val_precision, val_recall, val_coverage, val_auc = evaluator.evaluate_on_batches(
+            graph=valid_graph,
+            node_loader=valid_node_loader,
+            ground_truth=valid_ground_truth
+        )
+
+        report = "--> Finish epoch {}/{}\n" \
+            "--> Training:   Loss {:.5f} | Precision {:.3f}% | Recall {:.3f}% | Coverage {:.2f}% | AUC {:.2f}%\n"\
+            "--> Validation: Loss {:.5f} | Precision {:.3f}% | Recall {:.3f}% | Coverage {:.2f}% | AUC {:.2f}%"\
+            .format(epoch, args.num_epochs,
+                    train_avg_loss, train_precision * 100, train_recall * 100, train_coverage * 100, train_auc * 100,
+                    val_avg_loss, val_precision * 100, val_recall * 100, val_coverage * 100, val_auc * 100)
+        print(report)
+        metrics['train_avg_loss'].append(train_avg_loss)
+        metrics['train_precision'].append(train_precision)
+        metrics['train_recall'].append(train_recall)
+        metrics['train_coverage'].append(train_coverage)
+        metrics['train_auc'].append(train_auc)
+        metrics['val_avg_loss'].append(val_avg_loss)
+        metrics['val_precision'].append(val_precision)
+        metrics['val_recall'].append(val_recall)
+        metrics['val_coverage'].append(val_coverage)
+        metrics['val_auc'].append(val_auc)
+
+    print(f'Finish training! Elapsed time: {dt.datetime.now() - start_time} seconds')
+    # TODO: save params, save metrics and metrics plots
 
 
 parser = argparse.ArgumentParser("Graph Learning")

@@ -222,7 +222,7 @@ def train(device, params):
         num_epochs=args.num_epochs,
         start_epoch=args.start_epoch,
         neg_sample_size=args.neg_sample_size,
-        k=fixed_params.k,
+        k=fixed_params.sample_size,
         optimizer=fixed_params.optimizer,
         use_recency=fixed_params.use_recency,
         result_filepath=train_data_paths.log_filepath,

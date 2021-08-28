@@ -5,7 +5,6 @@ import dgl
 import numpy as np
 import pandas as pd
 import torch
-from dgl import heterograph
 from sklearn.model_selection import train_test_split
 
 
@@ -178,7 +177,7 @@ def get_node_loader(graph,
             _, user_nodes, _, item_nodes = train_test_split(user_nodes, item_nodes, test_size=sample_size)
         all_user_nodes += user_nodes.tolist()
         all_item_nodes += item_nodes.tolist()
-    ground_truth = (np.array(all_user_nodes), np.array(all_item_nodes))
+    ground_truth = list(zip(all_user_nodes, all_item_nodes))
     unique_user_nodes = np.unique(all_user_nodes)
     unique_item_nodes = np.arange(graph.num_nodes(item_id))
 
@@ -194,3 +193,28 @@ def get_node_loader(graph,
     }
     node_loader = dgl.dataloading.NodeDataLoader(**node_param)
     return node_loader, ground_truth
+
+
+# TODO: For now we use a uniform negative sampler for data loaders,
+#  but what if we use a sampler that give (src_id, ad_cate) that will click but won't convert ???
+#  Implement the class below to do that, and pass as `sampler_n` into data loaders
+#  Source: https://docs.dgl.ai/en/0.6.x/guide/minibatch-link.html
+#  If do this, change the way we evaluate model in the `Evaluator`
+
+class NegativeSampler(object):
+    def __init__(self, graph, sample_size, eid_dict):
+        self.weights = {
+            e_type: graph.in_degrees(etype=e_type).float() ** 0.75
+            for _, e_type, _ in graph.canonical_etypes
+        }
+        self.sample_size = sample_size
+        self.eid_dict = eid_dict
+
+    def __call__(self, graph, eid_dict):
+        result_dict = {}
+        for e_type, eid in eid_dict.items():
+            src, _ = graph.find_edges(eid, etype=e_type)
+            src = src.repeat_interleave(self.sample_size)
+            dst = self.weights[e_type].multinomial(len(src), replacement=True)
+            result_dict[e_type] = (src, dst)
+        return result_dict
