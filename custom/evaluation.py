@@ -111,7 +111,7 @@ class Evaluator:
             similarities = self.model.get_ratings(user_emb_rpt, item_emb_rpt) \
                 .cpu().detach().numpy().reshape(-1, item_emb.shape[0])
         recs = np.argsort(-similarities)
-        recs = recs[:, :self.k]
+        # recs = recs[:, :self.k]
         return similarities, recs
 
     def evaluate_on_batches(self,
@@ -126,11 +126,8 @@ class Evaluator:
         all_scores = []
         all_labels = []
         num_gt = 0
-        num_rec = 0
-        num_rec_in_gt = 0
         num_gt_in_rec = 0
         rec_item_set = set()
-        user_set = set()
 
         for i, (input_nodes, output_nodes, blocks) in enumerate(node_loader):
 
@@ -149,29 +146,26 @@ class Evaluator:
                                            top_recommends
                                            ):
 
-                user_set.add(user_node)
-
-                # For now, just evaluate on users in ground truth
+                # for users having no label, only compute auc
                 if user_node not in ground_truth_dict:
+                    all_scores += sim.tolist()
+                    all_labels += [0] * len(sim)
                     continue
 
                 # to compute auc
                 all_scores += sim.tolist()
                 all_labels += [int(iid in ground_truth_dict[user_node]) for iid, _ in enumerate(sim)]
 
-                # to compute precision
-                num_rec += len(rec)
-                num_gt_in_rec += len([iid for iid in ground_truth_dict[user_node] if iid in rec])
-
-                # to compute recall
+                # to compute accuracy (accuracy at 1, very strictly)
+                rec = rec[:len(ground_truth_dict[user_node])]
+                overlap = set(rec).intersection(ground_truth_dict[user_node])
+                num_gt_in_rec += len(overlap)
                 num_gt += len(ground_truth_dict[user_node])
-                num_rec_in_gt += len([iid for iid in rec if iid in ground_truth_dict[user_node]])
 
                 # to compute coverage
                 rec_item_set.update(rec)
 
         auc = roc_auc_score(y_true=all_labels, y_score=all_scores)
-        precision = num_gt_in_rec / num_rec
-        recall = num_rec_in_gt / num_gt
+        acc = num_gt_in_rec / num_gt
         coverage = len(rec_item_set) / graph.num_nodes(self.item_id)
-        return precision, recall, coverage, auc
+        return acc, auc, coverage

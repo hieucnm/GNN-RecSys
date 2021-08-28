@@ -1,6 +1,5 @@
 import argparse
 import datetime as dt
-import os
 import sys
 import warnings
 from collections import defaultdict
@@ -10,7 +9,6 @@ import torch.optim
 
 from custom.datasets import DataSet
 from custom.losses import MaxMarginLoss, BCELossCustom
-from custom.metrics import get_metrics_at_k
 from custom.models import ConvModel
 from custom.trainers import Trainer
 from custom.evaluation import Evaluator
@@ -141,7 +139,7 @@ def main():
         # print(f"--> Model at epoch {epoch} saved!")
 
         print('--> Epoch {}/{}: Evaluating sub-train ...'.format(epoch, args.num_epochs))
-        train_precision, train_recall, train_coverage, train_auc = evaluator.evaluate_on_batches(
+        train_acc, train_auc, train_coverage = evaluator.evaluate_on_batches(
             graph=train_graph,
             node_loader=sub_train_node_loader,
             ground_truth=sub_train_ground_truth
@@ -151,29 +149,27 @@ def main():
         val_avg_loss = trainer.calculate_loss(valid_edge_loader)
 
         print('--> Epoch {}/{}: Evaluating validation ...'.format(epoch, args.num_epochs))
-        val_precision, val_recall, val_coverage, val_auc = evaluator.evaluate_on_batches(
+        val_acc, val_auc, val_coverage = evaluator.evaluate_on_batches(
             graph=valid_graph,
             node_loader=valid_node_loader,
             ground_truth=valid_ground_truth
         )
 
         report = "--> Finish epoch {}/{}\n" \
-            "--> Training:   Loss {:.5f} | Precision {:.3f}% | Recall {:.3f}% | Coverage {:.2f}% | AUC {:.2f}%\n"\
-            "--> Validation: Loss {:.5f} | Precision {:.3f}% | Recall {:.3f}% | Coverage {:.2f}% | AUC {:.2f}%"\
+            "--> Training:   Loss {:.5f} | Acc. {:.3f}% | AUC {:.2f}% | Coverage {:.2f}%\n"\
+            "--> Validation: Loss {:.5f} | Acc. {:.3f}% | AUC {:.2f}% | Coverage {:.2f}%"\
             .format(epoch, args.num_epochs,
-                    train_avg_loss, train_precision * 100, train_recall * 100, train_coverage * 100, train_auc * 100,
-                    val_avg_loss, val_precision * 100, val_recall * 100, val_coverage * 100, val_auc * 100)
+                    train_avg_loss, train_acc * 100, train_auc * 100, train_coverage * 100,
+                    val_avg_loss, val_acc * 100, val_auc * 100, val_coverage * 100)
         print(report)
         metrics['train_avg_loss'].append(train_avg_loss)
-        metrics['train_precision'].append(train_precision)
-        metrics['train_recall'].append(train_recall)
-        metrics['train_coverage'].append(train_coverage)
+        metrics['train_acc'].append(train_acc)
         metrics['train_auc'].append(train_auc)
+        metrics['train_coverage'].append(train_coverage)
         metrics['val_avg_loss'].append(val_avg_loss)
-        metrics['val_precision'].append(val_precision)
-        metrics['val_recall'].append(val_recall)
-        metrics['val_coverage'].append(val_coverage)
+        metrics['val_acc'].append(val_acc)
         metrics['val_auc'].append(val_auc)
+        metrics['val_coverage'].append(val_coverage)
 
     print(f'Finish training! Elapsed time: {dt.datetime.now() - start_time} seconds')
     # TODO: save params, save metrics and metrics plots
