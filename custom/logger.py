@@ -10,8 +10,9 @@ class Logger(object):
         self.console = sys.stdout
         self.file = None
         if file_path is not None:
-            mkdir_if_missing(os.path.dirname(file_path))
+            mkdir_if_missing(file_path)
             self.file = open(file_path, 'a')
+        self.nl = True
 
     def __del__(self):
         self.close()
@@ -22,12 +23,28 @@ class Logger(object):
     def __exit__(self, *args):
         self.close()
 
-    def write(self, msg):
-        timestamp = dt.datetime.now().replace(microsecond=0)
-        msg = f'[{timestamp}] {msg}'
+    def _write_with_ts(self, msg):
+        ts = dt.datetime.now().replace(microsecond=0)
+        msg = f'[{ts}] {msg}'
         self.console.write(msg)
         if self.file is not None:
             self.file.write(msg)
+
+    def _write_without_ts(self, msg):
+        self.console.write(msg)
+        if self.file is not None:
+            self.file.write(msg)
+
+    def write(self, x):
+        """Write function overloaded."""
+        if x == '\n':
+            self._write_without_ts(x)
+            self.nl = True
+        elif self.nl:
+            self._write_with_ts(x)
+            self.nl = False
+        else:
+            self._write_without_ts(x)
 
     def flush(self):
         self.console.flush()
