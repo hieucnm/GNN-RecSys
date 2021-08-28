@@ -71,32 +71,3 @@ class Trainer:
 
             avg_loss = total_loss / len(edge_loader)
         return avg_loss
-
-
-def get_embeddings(model,
-                   graph,
-                   node_loader,
-                   embed_dim: int,
-                   print_every: int = 1
-                   ):
-    """
-    Fetch the embeddings for all the nodes in the node_loader.
-
-    Node Loader is preferable when computing embeddings because we can specify which nodes to compute the embedding for,
-    and only have relevant nodes in the computational blocks. Whereas Edgeloader is preferable for training, because
-    we generate negative edges also.
-    """
-    device = next(model.parameters()).device
-    embed_dict = {node_type: torch.zeros(graph.num_nodes(node_type), embed_dim).to(device)
-                  for node_type in graph.ntypes}
-
-    for i, (input_nodes, output_nodes, blocks) in enumerate(node_loader):
-        blocks = [b.to(device) for b in blocks]
-        input_features = blocks[0].srcdata['features']
-        h = model.get_repr(blocks, input_features)
-        for node_type, embedding in h.items():
-            embed_dict[node_type][output_nodes[node_type]] = embedding
-
-        if (i + 1) % print_every == 0:
-            print("Batch {}/{}".format(i, len(node_loader)))
-    return embed_dict
