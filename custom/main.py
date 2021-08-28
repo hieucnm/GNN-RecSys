@@ -33,7 +33,7 @@ def main():
     print(f'All arguments: {args}')
 
     print("Loading training data ...")
-    train_data = DataSet(data_dir=args.train_dir)
+    train_data = DataSet(data_dirs=args.train_dirs)
     train_graph = train_data.init_graph()
     label_edge_types = train_data.label_edge_types
     train_label_eid = get_label_edges(graph=train_graph, label_edge_types=label_edge_types)
@@ -64,7 +64,7 @@ def main():
                                                                     )
 
     print("Loading validation data ...")
-    valid_data = DataSet(data_dir=args.valid_dir)
+    valid_data = DataSet(data_dirs=args.valid_dirs)
     valid_graph = valid_data.init_graph()
     label_edge_types = valid_data.label_edge_types
     valid_label_eid = get_label_edges(graph=valid_graph, label_edge_types=label_edge_types)
@@ -180,9 +180,9 @@ def main():
 parser = argparse.ArgumentParser("Graph Learning")
 
 # Paths
-parser.add_argument('--train-dir',  type=str, help='Directory contains all training data')
-parser.add_argument('--valid-dir',  type=str, help='Directory contains all validation data')
-parser.add_argument('--test-dir',   type=str, help='Directory contains all testing data')
+parser.add_argument('--train-dirs',  type=str, help='Directories containing training data, sep by commas')
+parser.add_argument('--valid-dirs',  type=str, help='Directories containing validation data, sep by commas')
+parser.add_argument('--test-dirs',   type=str, help='Directories containing testing data, sep by commas')
 parser.add_argument('--result-dir', type=str, default='examples/results', help='Directory to save everything')
 
 # Model

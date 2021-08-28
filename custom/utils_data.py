@@ -63,12 +63,17 @@ def read_data(file_path):
         obj = pd.read_csv(file_path)
     elif file_path.endswith('.parquet') or os.path.isdir(file_path):
         obj = pd.read_parquet(file_path)
-    elif file_path.endswith('.pkl'):
-        with open(file_path, 'rb') as handle:
-            obj = pickle.load(handle)
     else:
         raise KeyError('File extension of {} not recognized.'.format(file_path))
     return obj
+
+
+def read_data_change_uid(data_path, suffix, uid_cols=('src_id', 'des_id')):
+    df = read_data(data_path)
+    for col in uid_cols:
+        if col in df.columns:
+            df[col] = df[col].astype(str) + f'_{suffix}'
+    return df
 
 
 # ==============================
@@ -138,14 +143,14 @@ def save_plots(metrics, save_dir):
 
     json.dump(metrics, open(f'{save_dir}/learning_metrics.json', 'w'))
 
-    for metric_name, metric_dict in metrics:
+    for metric_name, metric_dict in metrics.items():
         fig = plt.figure()
         plt.title(metric_name)
         fig.tight_layout()
         plt.rcParams["axes.titlesize"] = 6
 
         epochs = np.arange(len(metric_dict[list(metric_dict.keys())[0]]))
-        for data_set, metric_list in metric_dict:
+        for data_set, metric_list in metric_dict.items():
             plt.plot(epochs, metric_list)
         plt.legend(list(metric_dict.keys()))
         plt.savefig(f'{save_dir}/{metric_name}.png')
