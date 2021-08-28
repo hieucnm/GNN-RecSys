@@ -1,19 +1,8 @@
+import datetime as dt
 import os
 import sys
-import os.path as osp
-import datetime as dt
 
-
-def mkdir_if_missing(path: str, _type: str = 'path'):
-    assert _type in ['path', 'dir'], 'type must be `path` or `dir`'
-    if _type == 'path':
-        dir_path = osp.dirname(path)
-    else:
-        dir_path = path
-    if not osp.exists(dir_path):
-        os.makedirs(dir_path, exist_ok=True)
-        return True
-    return False
+from custom.utils_data import mkdir_if_missing
 
 
 class Logger(object):
