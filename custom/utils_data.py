@@ -1,12 +1,16 @@
+import json
 import os
+import os.path as osp
 import pickle
 
-import dgl
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import torch
-from sklearn.model_selection import train_test_split
 
+
+# ==========================
+# Utils for reading data ===
 
 def create_ids(df: pd.DataFrame, id_column, posfix='idx') -> pd.DataFrame:
     id_new_col = f"{id_column}_{posfix}"
@@ -67,16 +71,8 @@ def read_data(file_path):
     return obj
 
 
-# =========================
-# Utils for Data Loader ===
-
-def get_neighbor_sampler(n_layer, n_neighbor):
-    if n_neighbor == 0:
-        sampler = dgl.dataloading.MultiLayerFullNeighborSampler(n_layer)
-    else:
-        sampler = dgl.dataloading.MultiLayerNeighborSampler([n_neighbor] * n_layer, replace=False)
-    return sampler
-
+# ==============================
+# Utils for processing graph ===
 
 def get_label_edges(graph, label_edge_types):
     label_eid_dict = {}
@@ -116,105 +112,61 @@ def remove_label_edges(graph, label_edge_types):
     return adjust_graph
 
 
-def get_edge_loader(graph,
-                    adjust_graph,
-                    label_eid_dict,
-                    **params,
-                    ):
-    sampler = get_neighbor_sampler(n_layer=params['n_layers'] - 1, n_neighbor=params['num_neighbors'])
-    sampler_n = dgl.dataloading.negative_sampler.Uniform(params['neg_sample_size'])
+# =========================
+# Utils for saving data ===
 
-    edge_param = {
-        'g': graph,
-        'eids': label_eid_dict,
-        'g_sampling': adjust_graph,
-        'block_sampler': sampler,
-        'negative_sampler': sampler_n,
-        'batch_size': params['edge_batch_size'],
-        'shuffle': False,  # set to False when debugging
-        'num_workers': params['num_workers'],
-        'drop_last': False,
-        'pin_memory': True,
-    }
-
-    if params['use_ddp']:
-        edge_param.update({'use_ddp': params['use_ddp']})
-    train_edge_loader = dgl.dataloading.EdgeDataLoader(**edge_param)
-    return train_edge_loader
+def mkdir_if_missing(path: str, _type: str = 'path'):
+    assert _type in ['path', 'dir'], 'type must be `path` or `dir`'
+    if _type == 'path':
+        dir_path = osp.dirname(path)
+    else:
+        dir_path = path
+    if not osp.exists(dir_path):
+        os.makedirs(dir_path, exist_ok=True)
+        return True
+    return False
 
 
-def get_node_loader(graph,
-                    adjust_graph,
-                    label_eid_dict,
-                    label_edge_types,
-                    user_id,
-                    item_id,
-                    sample_size=None,
-                    **params):
+# noinspection SpellCheckingInspection
+def save_plots(metrics, save_dir):
     """
-    Get node loader for given edge_types, and corresponding ground truth
-    Parameters
-    ----------
-    user_id
-    graph
-    adjust_graph
-    label_eid_dict
-    label_edge_types
-    sample_size
-    item_id
-    params
-
-    Returns
-    -------
-
+    Visualize train & validation loss & metrics.
     """
-    all_user_nodes = []
-    all_item_nodes = []
-    for edge_type in label_edge_types:
-        user_nodes, item_nodes = graph.find_edges(label_eid_dict[edge_type], etype=edge_type)
-        if sample_size is not None:
-            # TODO: stratified split by item_nodes (`ad_cate`)
-            _, user_nodes, _, item_nodes = train_test_split(user_nodes, item_nodes, test_size=sample_size)
-        all_user_nodes += user_nodes.tolist()
-        all_item_nodes += item_nodes.tolist()
-    ground_truth = list(zip(all_user_nodes, all_item_nodes))
-    unique_user_nodes = np.unique(all_user_nodes)
-    unique_item_nodes = np.arange(graph.num_nodes(item_id))
 
-    sampler = get_neighbor_sampler(n_layer=params['n_layers'] - 1, n_neighbor=params['num_neighbors'])
-    node_param = {
-        'g': adjust_graph,
-        'nids': {user_id: unique_user_nodes, item_id: unique_item_nodes},
-        'block_sampler': sampler,
-        'batch_size': params['node_batch_size'],
-        'shuffle': False,
-        'drop_last': False,
-        'num_workers': params['num_workers'],
-    }
-    node_loader = dgl.dataloading.NodeDataLoader(**node_param)
-    return node_loader, ground_truth
+    save_dir = f'{save_dir}/plots'
+    mkdir_if_missing(save_dir, _type='dir')
+
+    json.dump(metrics, open(f'{save_dir}/learning_metrics.json', 'w'))
+
+    for metric_name, metric_dict in metrics:
+        fig = plt.figure()
+        plt.title(metric_name)
+        fig.tight_layout()
+        plt.rcParams["axes.titlesize"] = 6
+
+        epochs = np.arange(len(metric_dict[list(metric_dict.keys())[0]]))
+        for data_set, metric_list in metric_dict:
+            plt.plot(epochs, metric_list)
+        plt.legend(list(metric_dict.keys()))
+        plt.savefig(f'{save_dir}/{metric_name}.png')
+        plt.close(fig)
 
 
-# TODO: For now we use a uniform negative sampler for data loaders,
-#  but what if we use a sampler that give (src_id, ad_cate) that will click but won't convert ???
-#  Implement the class below to do that, and pass as `sampler_n` into data loaders
-#  Source: https://docs.dgl.ai/en/0.6.x/guide/minibatch-link.html
-#  If do this, change the way we evaluate model in the `Evaluator`
+# noinspection SpellCheckingInspection
+def save_everything(graph, model, args, metrics, save_dir):
 
-class NegativeSampler(object):
-    def __init__(self, graph, sample_size, eid_dict):
-        self.weights = {
-            e_type: graph.in_degrees(etype=e_type).float() ** 0.75
-            for _, e_type, _ in graph.canonical_etypes
-        }
-        self.sample_size = sample_size
-        self.eid_dict = eid_dict
+    save_dir = f'{save_dir}/metadata'
+    mkdir_if_missing(save_dir, _type='dir')
 
-    def __call__(self, graph, eid_dict):
-        result_dict = {}
-        for e_type, eid in eid_dict.items():
-            src, _ = graph.find_edges(eid, etype=e_type)
-            src = src.repeat_interleave(self.sample_size)
-            dst = self.weights[e_type].multinomial(len(src), replacement=True)
-            result_dict[e_type] = (src, dst)
-        return result_dict
+    with open(f'{save_dir}/arguments.json', 'w') as f:
+        json.dump(vars(args), f)
+
+    with open('model_structure.txt', 'w') as f:
+        f.write(str(model.eval()))
+
+    with open(f'{save_dir}/graph_schema.json', 'w') as f:
+        json.dump({'canonical_etypes': graph.canonical_etypes}, f)
+
+    save_plots(metrics, save_dir=save_dir)
+
+    print("Saved graph schema, model structure, learning plots & all arguments!")

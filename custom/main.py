@@ -7,13 +7,14 @@ from collections import defaultdict
 import torch
 import torch.optim
 
+from custom.dataloaders import get_edge_loader, get_node_loader
 from custom.datasets import DataSet
+from custom.evaluation import Evaluator
+from custom.logger import Logger
 from custom.losses import MaxMarginLoss, BCELossCustom
 from custom.models import ConvModel
 from custom.trainers import Trainer
-from custom.evaluation import Evaluator
-from custom.utils_data import get_edge_loader, get_node_loader, remove_label_edges, get_label_edges
-from custom.logger import Logger
+from custom.utils_data import remove_label_edges, get_label_edges, save_everything
 
 warnings.filterwarnings('ignore')
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -25,9 +26,11 @@ def main():
     # Redirect print to both console and log file
     timestamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
     result_dir = f'{args.result_dir}/{timestamp}'
-    # sys.stdout = Logger(f'{result_dir}/running_log.txt')
+    sys.stdout = Logger(f'{result_dir}/running_log.txt')
+    print(f'Everything will be saved to {result_dir}')
 
-    print(f"Using device: {device.type}. All arguments: {args}")
+    print(f'Using device: {device.type}')
+    print(f'All arguments: {args}')
 
     print("Loading training data ...")
     train_data = DataSet(data_dir=args.train_dir)
@@ -88,14 +91,13 @@ def main():
                                                             node_batch_size=args.node_batch_size,
                                                             num_workers=args.num_workers
                                                             )
-    print("Creating model ...")
+    print("Initializing model ...")
     dim_dict = {'user': train_data.num_user_features,
                 'item': train_data.num_items,
                 'out': args.out_dim,
                 'hidden': args.hidden_dim}
 
-    # We want the model to not contain the label edges
-    model = ConvModel(graph=train_adjust_graph,
+    model = ConvModel(graph=train_graph,
                       dim_dict=dim_dict,
                       label_edge_types=label_edge_types,
                       n_layers=args.n_layers,
@@ -109,7 +111,6 @@ def main():
                       )
     if device.type != 'cpu':
         model = model.to(device)
-    print(model.eval())
 
     criterion = MaxMarginLoss(delta=args.delta) if args.loss == 'hinge' else BCELossCustom()
     optimizer = torch.optim.Adam(params=model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
@@ -127,7 +128,7 @@ def main():
                           )
 
     # TRAIN
-    metrics = defaultdict(list)
+    metrics = defaultdict(lambda: defaultdict(list))
     start_time = dt.datetime.now()
     print('Start training:')
     for epoch in range(1, args.num_epochs + 1):
@@ -135,8 +136,9 @@ def main():
         print('--> Epoch {}/{}: Training ...'.format(epoch, args.num_epochs))
         train_avg_loss = trainer.train(train_edge_loader)
 
-        # torch.save(model.state_dict(), f'{result_dir}/model_ep_{epoch}.pth')
-        # print(f"--> Model at epoch {epoch} saved!")
+        if epoch > 0:
+            torch.save(model.state_dict(), f'{result_dir}/model_ep_{epoch}.pth')
+            print(f"--> Model at epoch {epoch} saved!")
 
         print('--> Epoch {}/{}: Evaluating sub-train ...'.format(epoch, args.num_epochs))
         train_acc, train_auc, train_coverage = evaluator.evaluate_on_batches(
@@ -162,17 +164,17 @@ def main():
                     train_avg_loss, train_acc * 100, train_auc * 100, train_coverage * 100,
                     val_avg_loss, val_acc * 100, val_auc * 100, val_coverage * 100)
         print(report)
-        metrics['train_avg_loss'].append(train_avg_loss)
-        metrics['train_acc'].append(train_acc)
-        metrics['train_auc'].append(train_auc)
-        metrics['train_coverage'].append(train_coverage)
-        metrics['val_avg_loss'].append(val_avg_loss)
-        metrics['val_acc'].append(val_acc)
-        metrics['val_auc'].append(val_auc)
-        metrics['val_coverage'].append(val_coverage)
+        metrics['Loss']['training'].append(train_avg_loss)
+        metrics['Loss']['validation'].append(val_avg_loss)
+        metrics['Acc']['training'].append(train_acc)
+        metrics['Acc']['validation'].append(val_acc)
+        metrics['AUC']['training'].append(train_auc)
+        metrics['AUC']['validation'].append(val_auc)
+        metrics['Coverage']['training'].append(train_coverage)
+        metrics['Coverage']['validation'].append(val_coverage)
 
+    save_everything(train_graph, model, args, metrics, result_dir)
     print(f'Finish training! Elapsed time: {dt.datetime.now() - start_time} seconds')
-    # TODO: save params, save metrics and metrics plots
 
 
 parser = argparse.ArgumentParser("Graph Learning")
