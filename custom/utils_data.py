@@ -166,7 +166,7 @@ def save_everything(graph, model, args, metrics, save_dir):
     with open(f'{save_dir}/arguments.json', 'w') as f:
         json.dump(vars(args), f)
 
-    with open('model_structure.txt', 'w') as f:
+    with open(f'{save_dir}/model_structure.txt', 'w') as f:
         f.write(str(model.eval()))
 
     with open(f'{save_dir}/graph_schema.json', 'w') as f:
