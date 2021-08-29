@@ -21,6 +21,13 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 # device = torch.device('cpu')  # to debug
 
 
+def seed_everything():
+    seed = 42
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
+
 def main():
 
     # Redirect print to both console and log file
@@ -220,4 +227,5 @@ parser.add_argument('--num-neighbors', type=int, default=256,
 
 if __name__ == '__main__':
     args = parser.parse_args()
+    seed_everything()
     main()
