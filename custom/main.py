@@ -39,6 +39,10 @@ def main():
     print(f'Using device: {device.type}')
     print(f'All arguments: {args}')
 
+    # TODO: there are users had no interactions on group_chat nor ad, but they were removed
+    #   due to the inner join in the class `Dataset`. In another word, we didn't train on isolated nodes.
+    #   Fix this.
+
     print("Loading training data ...")
     train_data = DataSet(data_dirs=args.train_dirs)
     train_graph = train_data.init_graph()
@@ -208,22 +212,29 @@ parser.add_argument('--aggregator-hetero', type=str, default='sum', choices=['me
 parser.add_argument('--aggregator-homo', type=str, default='mean', choices=['mean', 'mean_nn', 'max_nn'],
                     help='Function to aggregate messages from same edge type')
 parser.add_argument('--loss', type=str, default='hinge', choices=['hinge', 'bce'], help='Loss function')
-parser.add_argument('--delta', type=float, default=0.05, help='Margin in hinge loss if used')
+parser.add_argument('--delta', type=float, default=0.2, help='Margin in hinge loss if used')
 parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
 parser.add_argument('--weight-decay', type=float, default=1e-5, help='Weight decay in SGD')
-parser.add_argument('--num-epochs', type=int, default=3, help='Number of epochs')
-parser.add_argument('--print-every', type=int, default=10, help='Print loss every these iterations')
-parser.add_argument('--neg-sample-size', type=int, default=4, help='Number of samples when doing negative sampling')
-parser.add_argument('--edge-batch-size', type=int, default=64, help='Number of edges in a batch')
-parser.add_argument('--node-batch-size', type=int, default=64, help='Number of nodes in a batch')
-parser.add_argument('--precision-at-k', type=int, default=5, help='Precision/Recall at this number will be computed')
+parser.add_argument('--num-epochs', type=int, default=4, help='Number of epochs')
+parser.add_argument('--print-every', type=int, default=4, help='Print loss every these iterations')
+parser.add_argument('--neg-sample-size', type=int, default=32, help='Number of samples when doing negative sampling')
+parser.add_argument('--edge-batch-size', type=int, default=128, help='Number of edges in a batch')
+parser.add_argument('--node-batch-size', type=int, default=128, help='Number of nodes in a batch')
+parser.add_argument('--precision-at-k', type=int, default=5, help='Precision/Recall at k to evaluate (deprecated)')
 parser.add_argument('--num-workers', type=int, default=8, help='Number of cores of CPU to use')
 parser.add_argument('--use-ddp', action='store_true', default=False, help='Only use for multi-GPU')
 parser.add_argument('--num-neighbors', type=int, default=256,
                     help='Number of random neighbors to aggregate. '
                          'Set 0 to use all neighbors, but not recommended because the memory will explode. '
-                         'For now we use the same number for all layers. '
-                         'Later, we will set different numbers for different layers by passing a list.')
+                         'For now we use the same number for all layers and all edge types. '
+                         'Later, we will set different numbers by passing a list[dict[e_type, int]].')
+
+# TODO: Best params for now
+#   loss: hinge
+#   pred: cos
+#   num-neighbors: 256
+#   delta: 0.2 (the higher, the more epochs. 0.1 worse, didn't try 0.3)
+#   neg-sample-size: 32
 
 if __name__ == '__main__':
     args = parser.parse_args()
