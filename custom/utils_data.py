@@ -158,13 +158,15 @@ def save_plots(metrics, save_dir):
 
 
 # noinspection SpellCheckingInspection
-def save_everything(graph, model, args, metrics, save_dir):
+def save_everything(graph, model, args, metrics, dim_dict, save_dir):
 
     save_dir = f'{save_dir}/metadata'
     mkdir_if_missing(save_dir, _type='dir')
 
+    args = vars(args)
+    args['dim_dict'] = dim_dict
     with open(f'{save_dir}/arguments.json', 'w') as f:
-        json.dump(vars(args), f)
+        json.dump(args, f)
 
     with open(f'{save_dir}/model_structure.txt', 'w') as f:
         f.write(str(model.eval()))

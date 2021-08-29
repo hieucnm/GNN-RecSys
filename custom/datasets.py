@@ -12,7 +12,7 @@ class DataSet:
         self.label_edge_types = self.edge_triplets['label']
 
         self.data_dirs = data_dirs.split(',')
-        self.data_dict, self.uid_map_df, self.aid_map_df = self.init_data()
+        self.data_dict, self.uid_map_df, self.iid_map_df = self.init_data()
         self.feature_dict = self.load_features()
         self.summary_data()
 
@@ -35,7 +35,7 @@ class DataSet:
 
     @property
     def num_items(self):
-        return self.aid_map_df.shape[0]
+        return self.iid_map_df.shape[0]
 
     @property
     def num_users(self):
@@ -45,8 +45,13 @@ class DataSet:
     def num_user_features(self):
         return self.feature_dict[self.user_id].shape[1]
 
-    def init_data(self):
+    def get_node2uid_dict(self):
+        return self.uid_map_df.set_index(f'{self.user_id}_{self.new_id_suffix}').to_dict()
 
+    def get_node2iid_dict(self):
+        return self.iid_map_df.set_index(f'{self.item_id}_{self.new_id_suffix}').to_dict()
+
+    def init_data(self):
         # oa_form: both click and convert
         df_ad = pd.concat([read_data_change_uid(data_dir.rstrip('/') + '/ad.parquet', index)
                            for index, data_dir in enumerate(self.data_dirs)]).reset_index(drop=True)
@@ -64,7 +69,7 @@ class DataSet:
                                                                     ['src_id', 'des_id'],
                                                                     self.new_id_suffix)
         # map ad_cate of different dataframes to same indices
-        (df_ad, df_label), aid_map_df = create_common_ids([df_ad, df_label],
+        (df_ad, df_label), iid_map_df = create_common_ids([df_ad, df_label],
                                                           ['ad_cate'],
                                                           self.new_id_suffix)
         data_dict = {
@@ -73,10 +78,9 @@ class DataSet:
             'ad_convert': df_ad[df_ad['kind'] == 201].reset_index(drop=True),
             'label': df_label
         }
-        return data_dict, uid_map_df, aid_map_df
+        return data_dict, uid_map_df, iid_map_df
 
     def load_features(self):
-
         feature_dict = {}
 
         # user feature
@@ -90,7 +94,7 @@ class DataSet:
         feature_dict[self.user_id] = torch.tensor(user_feature.values).float()
 
         # item feature: index only
-        item_index = self.aid_map_df[f'{self.item_id}_{self.new_id_suffix}']
+        item_index = self.iid_map_df[f'{self.item_id}_{self.new_id_suffix}']
         feature_dict[self.item_id] = torch.tensor(item_index.values).long()
 
         # also load other node's features here if necessary
@@ -112,12 +116,11 @@ class DataSet:
             df_click.shape[0], df_click[self.user_id].nunique(), df_click[self.item_id].nunique(),
             df_convert.shape[0], df_convert[self.user_id].nunique(), df_convert[self.item_id].nunique(),
             df_label.shape[0], df_label[self.user_id].nunique(), df_label[self.item_id].nunique(),
-            '', self.uid_map_df.shape[0], self.aid_map_df.shape[0], self.feature_dict[self.user_id].shape[1]
+            '', self.uid_map_df.shape[0], self.iid_map_df.shape[0], self.feature_dict[self.user_id].shape[1]
         )
         print(summary)
 
     def init_graph_schema(self):
-
         graph_schema = dict()
         for data_name, df in self.data_dict.items():
             if data_name in self.homo_data_names:

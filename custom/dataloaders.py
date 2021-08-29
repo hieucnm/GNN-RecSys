@@ -40,10 +40,10 @@ def get_edge_loader(graph,
 
 def get_node_loader(graph,
                     adjust_graph,
-                    label_eid_dict,
-                    label_edge_types,
                     user_id,
                     item_id,
+                    label_eid_dict=None,
+                    label_edge_types=None,
                     sample_size=None,
                     **params):
     """
@@ -73,6 +73,7 @@ def get_node_loader(graph,
         all_user_nodes += user_nodes.tolist()
         all_item_nodes += item_nodes.tolist()
     ground_truth = list(zip(all_user_nodes, all_item_nodes))
+
     unique_user_nodes = np.unique(all_user_nodes)
     unique_item_nodes = np.arange(graph.num_nodes(item_id))
 

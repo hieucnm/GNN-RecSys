@@ -140,7 +140,7 @@ def main():
 
     # TRAIN
     metrics = defaultdict(lambda: defaultdict(list))
-    start_time = dt.datetime.now()
+    start_time = dt.datetime.now().replace(microsecond=0)
     print('Start training:')
     for epoch in range(1, args.num_epochs + 1):
 
@@ -184,8 +184,8 @@ def main():
         metrics['Coverage']['training'].append(train_coverage)
         metrics['Coverage']['validation'].append(val_coverage)
 
-    save_everything(train_graph, model, args, metrics, result_dir)
-    print(f'Finish training! Elapsed time: {dt.datetime.now() - start_time} seconds')
+    save_everything(train_graph, model, args, metrics, dim_dict, result_dir)
+    print(f'Finish training! Elapsed time: {dt.datetime.now().replace(microsecond=0) - start_time}')
 
 
 parser = argparse.ArgumentParser("Graph Learning")

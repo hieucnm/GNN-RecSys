@@ -1,8 +1,11 @@
 from collections import defaultdict
 
 import numpy as np
+import pandas as pd
 import torch
 from sklearn.metrics import roc_auc_score
+
+from custom.utils_data import mkdir_if_missing
 
 
 def repeat_tensors(x, y):
@@ -31,9 +34,9 @@ def create_ground_truth_dict(ground_truth):
 class Evaluator:
     def __init__(self,
                  model,
-                 k,
                  user_id,
                  item_id,
+                 k: int = 5,
                  print_every: int = 1
                  ):
         self.model = model
@@ -89,9 +92,8 @@ class Evaluator:
                             node_loader,
                             ground_truth
                             ):
-
-        ground_truth_dict = create_ground_truth_dict(ground_truth)
         item_emb = self._get_all_item_embeddings(graph, node_loader)
+        ground_truth_dict = create_ground_truth_dict(ground_truth)
 
         all_scores = []
         all_labels = []
@@ -99,14 +101,14 @@ class Evaluator:
         num_gt_in_rec = 0
         rec_item_set = set()
 
-        for i, (input_nodes, output_nodes, blocks) in enumerate(node_loader):
+        for i, (_, output_nodes, blocks) in enumerate(node_loader):
 
             if (i + 1) % self.print_every == 0:
                 print("Batch {}/{}".format(i + 1, len(node_loader)))
 
-            embed_dict = self._forward(blocks)
-            if self.user_id not in embed_dict:
+            if self.user_id not in output_nodes:
                 continue
+            embed_dict = self._forward(blocks)
 
             user_emb = embed_dict[self.user_id]
             similarities, top_recommends = self._get_top_k_recommends(user_emb, item_emb)
@@ -139,3 +141,61 @@ class Evaluator:
         acc = num_gt_in_rec / num_gt
         coverage = len(rec_item_set) / graph.num_nodes(self.item_id)
         return acc, auc, coverage
+
+
+class Predictor(Evaluator):
+    def __init__(self,
+                 model,
+                 user_id,
+                 item_id,
+                 save_dir,
+                 node2uid: dict,
+                 node2iid: dict,
+                 print_every: int = 1
+                 ):
+        super(Predictor, self).__init__(model=model,
+                                        user_id=user_id,
+                                        item_id=item_id,
+                                        print_every=print_every
+                                        )
+        self.node2uid = node2uid
+        self.iid_columns = [f'cate_{v}' for k, v in sorted(node2iid.items())]
+        self.emb_columns = [f'_c{i}' for i in range(self.embed_dim)]
+
+        self.save_dir = save_dir
+        self.user_embed_dir = f'{save_dir}/user_embeddings'
+        self.score_dir = f'{save_dir}/scores'
+        mkdir_if_missing(self.user_embed_dir, _type='dir')
+        mkdir_if_missing(self.score_dir, _type='dir')
+
+    def _save_scores(self, scores, output_nodes, index):
+        score_df = pd.DataFrame(data=scores, columns=self.iid_columns)
+        score_df[self.user_id] = [self.node2uid[nid] for nid in output_nodes[self.user_id]]
+        score_df = score_df[[self.user_id] + self.iid_columns]
+        score_df.to_parquet(f'{self.score_dir}/part_{index:05d}.parquet')
+
+    def _save_user_embeds(self, embeds, index):
+        embed_df = pd.DataFrame(data=embeds, columns=self.emb_columns)
+        embed_df.to_parquet(f'{self.user_embed_dir}/part_{index:05d}.parquet')
+
+    def _save_item_embeds(self, embeds):
+        embed_df = pd.DataFrame(data=embeds, columns=self.emb_columns)
+        embed_df.to_parquet(f'{self.save_dir}/item_embeddings.parquet')
+
+    def predict_and_save_on_batches(self, graph, node_loader):
+        item_emb = self._get_all_item_embeddings(graph, node_loader)
+        self._save_item_embeds(item_emb)
+
+        for i, (_, output_nodes, blocks) in enumerate(node_loader):
+
+            if self.user_id not in output_nodes:
+                continue
+            embed_dict = self._forward(blocks)
+
+            user_emb = embed_dict[self.user_id]
+            self._save_user_embeds(user_emb, i)
+            scores, _ = self._get_top_k_recommends(user_emb, item_emb)
+            self._save_scores(scores, output_nodes, i)
+
+            if (i + 1) % self.print_every == 0:
+                print("Batch {}/{}".format(i + 1, len(node_loader)))
