@@ -2,7 +2,7 @@ import pandas as pd
 import torch
 from dgl import heterograph
 
-from custom.utils_data import create_common_ids, read_data_change_uid
+from src.utils_data import create_common_ids, read_data_change_uid
 
 
 class DataSet:

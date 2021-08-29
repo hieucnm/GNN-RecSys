@@ -13,7 +13,7 @@ from skopt.callbacks import CheckpointSaver
 from skopt import load
 import torch
 
-from src.builder import create_graph, import_features
+from src.builder import create_graph
 from src.model import ConvModel, max_margin_loss
 from src.sampling import train_valid_split, generate_dataloaders
 from src.metrics import (create_already_bought, create_ground_truth,
@@ -23,9 +23,9 @@ from src.evaluation import explore_recs, explore_sports, check_coverage
 from src.utils import save_txt, save_outputs, get_last_checkpoint
 from src.utils_data import DataLoader, FixedParameters, DataPaths, assign_graph_features
 from src.utils_vizualization import plot_train_loss
-import inference_hp
+from base import inference_hp
 
-from logging_config import get_logger
+from base.logging_config import get_logger
 
 log = get_logger(__name__)
 

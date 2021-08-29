@@ -4,7 +4,7 @@ import pandas as pd
 import pickle
 from dgl.data.utils import save_graphs
 
-from src.utils_vizualization import plot_train_loss
+from base.src.utils_vizualization import plot_train_loss
 
 
 def save_txt(data_to_save, filepath, mode='a'):

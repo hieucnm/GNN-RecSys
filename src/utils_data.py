@@ -1,295 +1,179 @@
-import math
+import json
+import os
+import os.path as osp
+import pickle
 
+import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 import torch
 
-from src.builder import (create_ids, df_to_adjacency_list, import_features,
-                         filter_unseen_item, report_user_coverage)
-from src.model import MaxMarginLoss, BCELossCustom
-from src.utils import read_data
+
+# ==========================
+# Utils for reading data ===
+
+def create_ids(df: pd.DataFrame, id_column, posfix='idx') -> pd.DataFrame:
+    id_new_col = f"{id_column}_{posfix}"
+    id_map_df = pd.DataFrame(df[id_column].unique(), columns=[id_column])
+    id_map_df[id_new_col] = id_map_df.index
+    df = df.merge(id_map_df, on=id_column)
+    return df
 
 
-class DataPaths:
-    def __init__(self):
-        self.result_filepath = 'TXT FILE WHERE TO LOG THE RESULTS .txt'
-        self.sport_feat_path = 'FEATURE DATASET, SPORTS (sport names) .csv'
-        self.train_path = 'INTERACTION LIST, USER-ITEM (Train dataset).csv'
-        self.test_path = 'INTERACTION LIST, USER-ITEM (Train dataset).csv'
-        self.item_sport_path = 'INTERACTION LIST, ITEM-SPORT .csv'
-        self.user_sport_path = 'INTERACTION LIST, USER-SPORT .csv'
-        self.sport_sportg_path = 'INTERACTION LIST, SPORT-SPORT .csv'
-        self.item_feat_path = 'FEATURE DATASET, ITEMS .csv'
-        self.user_feat_path = 'FEATURE DATASET, USERS.csv'
-        self.sport_onehot_path = 'FEATURE DATASET, SPORTS (one-hot vectors) .csv'
-
-
-# noinspection PyUnresolvedReferences
-class FixedParameters:
-    def __init__(self, args):
-        """
-        All parameters that are fixed, i.e. not part of the hyperparametrization.
-
-        Attributes
-        ----------
-        uid_column :
-            Identifier for the users.
-        Days_of_purchases (Days_of_clicks) :
-            Number of days of purchases (clicks) that should be kept in the dataset.
-            Intuition is that interactions of 12+ months ago might not be relevant. Max is 710 days
-            Those that do not have any remaining interactions will be fed recommendations from another
-            model.
-        Discern_clicks :
-            Clicks and purchases will be considered as 2 different edge types
-        Duplicates :
-            Determines how to handle duplicates in the training set. 'count_occurrence' will drop all
-            duplicates except last, and the number of interactions will be stored in the edge feature.
-            If duplicates == 'count_occurrence', aggregator_type needs to handle edge feature. 'keep_last'
-            will drop all duplicates except last. 'keep_all' will conserve all duplicates.
-        Explore :
-            Print examples of recommendations and of similar sports
-        uid_column, iid_column :
-            Identifier for the users & items.
-        Lifespan_of_items :
-            Number of days since most recent transactions for an item to be considered by the
-            model. Max is 710 days. Won't make a difference is it is > Days_of_interaction.
-        Num_choices :
-            Number of examples of recommendations and similar sports to print
-        Patience :
-            Number of epochs to wait for Early stopping
-        Pred :
-            Function that takes as input embedding of user and item, and outputs ratings. Choices : 'cos' for cosine
-            similarity, 'nn' for multilayer perceptron with sigmoid function at the end
-        Start_epoch :
-            Load model from a previous epoch
-        Train_on_clicks :
-            When parametrizing the GNN, edges of purchases are always included. If true, clicks will also
-            be included
-        """
-
-        self.days_of_converts = 365  # Max is 710
-        self.days_of_clicks = 30  # Max is 710
-        self.lifespan_of_items = 180
-        self.etype = [('user', 'converts', 'item')]
-        self.reverse_etype = {('user', 'converts', 'item'): ('item', 'converted-by', 'user')}
-        self.discern_clicks = True
-        if self.discern_clicks:
-            self.etype.append(('user', 'clicks', 'item'))
-            self.reverse_etype[('user', 'clicks', 'item')] = ('item', 'clicked-by', 'user')
-
-        self.num_choices = 10
-        self.explore = True
-        self.remove_false_negative = True  # default True
-        self.remove_train_eids = True  # remove the edges you want to predict to avoid data leakage, default False
-        self.train_on_clicks = True
-        self.remove_on_inference = .7
-        self.run_inference = 1
-        self.subtrain_size = 0.05
-        self.valid_size = 0.05
-        self.optimizer = torch.optim.Adam
-
-        self.duplicates = args.duplicates  # 'keep_last', 'keep_all', 'count_occurrence'
-        self.num_epochs = args.num_epochs
-        self.start_epoch = args.start_epoch
-        self.patience = args.patience
-        self.edge_batch_size = args.edge_batch_size
-        self.node_batch_size = args.node_batch_size
-        self.k = args.precision_at_k
-        self.num_neighbors = args.num_neighbors
-        self.pred = args.pred
-        if self.pred == 'cos':
-            self.loss_fn = MaxMarginLoss(
-                delta=args.delta,
-                neg_sample_size=args.neg_sample_size,
-                remove_false_negative=self.remove_false_negative
-            )
-        else:
-            self.loss_fn = BCELossCustom()
-
-        self.uid_column = 'src_id'
-        self.iid_column = 'ad_cate'
-        self.date_column = 'date'
-        self.conv_column = 'converted'
-        self.use_recency = True
-        self.clicks_sample = 1.
-        self.converts_sample = 1.
-        self.norm = True
-
-        # self.dropout = .5  # HP
-        # self.norm = False  # HP
-        # self.use_popularity = False  # HP
-        # self.days_popularity = 0  # HP
-        # self.weight_popularity = 0.  # HP
-        # self.use_recency = False  # HP
-        self.aggregator_type = 'mean'  # HP, search `aggregator_type` in this project
-        self.aggregator_hetero = 'mean'  # HP
-        # self.purchases_sample = .5  # HP
-        # self.clicks_sample = .4  # HP
-        # self.embedding_layer = False  # HP
-        # self.edge_update = True  # Removed implementation; not useful
-        # self.automatic_precision = False  # Removed implementation; not useful
-
-
-class DataLoader:
-    """Data loading, cleaning and pre-processing."""
-
-    # noinspection PyTupleAssignmentBalance
-    def __init__(self, data_paths, fixed_params):
-
-        self.data_paths = data_paths
-        self.user_feat_df = read_data(data_paths.user_feat_path)
-        self.user_item_train = read_data(data_paths.train_path)
-        self.user_item_test = read_data(data_paths.test_path)
-
-        self.user_item_test = filter_unseen_item(self.user_item_train, self.user_item_test, fixed_params.iid_column)
-        report_user_coverage(self.user_item_train, self.user_item_test, fixed_params.uid_column)
-
-        self.user_id_df = create_ids(self.user_item_train, fixed_params.uid_column)
-        self.item_id_df = create_ids(self.user_item_train, fixed_params.iid_column)
-
-        print("--> running df_to_adjacency_list ...")
-        (
-            self.adjacency_dict,
-            self.ground_truth_test,
-            self.ground_truth_convert_test,
-            self.user_item_train_grouped
-        ) = df_to_adjacency_list(
-            user_item_train=self.user_item_train,
-            user_item_test=self.user_item_test,
-            user_id_df=self.user_id_df,
-            item_id_df=self.item_id_df,
-            uid_column=fixed_params.uid_column,
-            iid_column=fixed_params.iid_column,
-            date_column=fixed_params.date_column,
-            conv_column=fixed_params.conv_column,
-            discern_clicks=fixed_params.discern_clicks,
-            duplicates=fixed_params.duplicates
-        )
-
-        print("--> assigning graph schema ...")
-        if fixed_params.discern_clicks:
-            self.graph_schema = {
-                ('user', 'converts', 'item'):
-                    list(zip(self.adjacency_dict['convert_src'], self.adjacency_dict['convert_dst'])),
-                ('item', 'converted-by', 'user'):
-                    list(zip(self.adjacency_dict['convert_dst'], self.adjacency_dict['convert_src'])),
-                ('user', 'clicks', 'item'):
-                    list(zip(self.adjacency_dict['clicks_src'], self.adjacency_dict['clicks_dst'])),
-                ('item', 'clicked-by', 'user'):
-                    list(zip(self.adjacency_dict['clicks_dst'], self.adjacency_dict['clicks_src'])),
-            }
-        else:
-            self.graph_schema = {
-                ('user', 'converts', 'item'):
-                    list(zip(self.adjacency_dict['user_item_src'], self.adjacency_dict['user_item_dst'])),
-                ('item', 'converted-by', 'user'):
-                    list(zip(self.adjacency_dict['user_item_dst'], self.adjacency_dict['user_item_src'])),
-            }
-
-
-def assign_graph_features(graph,
-                          fixed_params,
-                          data,
-                          ):
+def create_common_ids(df_list, id_columns, suffix='idx'):
     """
-    Assigns features to graph nodes and edges, based on data previously provided in the dataloader.
+    Similar to create_ids function, but processing for list of dataframes on a common columns if exist (e.g `user_id`)
+    """
 
+    id_set = set()
+    _ = [id_set.update(df[id_column]) for df in df_list
+         for id_column in id_columns if id_column in df.columns]
+
+    key_id = id_columns[0]
+    id_map_df = pd.DataFrame(sorted(id_set), columns=[key_id])
+    id_map_df[f"{key_id}_{suffix}"] = id_map_df.index
+
+    df_list_res = []
+    for df in df_list:
+        for id_column in id_columns:
+            if id_column not in df.columns:
+                continue
+            if id_column not in id_map_df:
+                df = df.merge(
+                    id_map_df.rename(columns={key_id: id_column, f'{key_id}_{suffix}': f'{id_column}_{suffix}'
+                                              }), on=id_column)
+            else:
+                df = df.merge(id_map_df, on=key_id)
+        df_list_res.append(df)
+    return df_list_res, id_map_df
+
+
+def read_data(file_path):
+    """
+    Generic function to read any kind of data. Extensions supported: '.gz', '.csv', '.pkl'
+    """
+    if isinstance(file_path, pd.DataFrame):
+        return file_path
+
+    if file_path.endswith('.gz'):
+        obj = pd.read_csv(file_path, compression='gzip',
+                          header=0, sep=';', quotechar='"',
+                          error_bad_lines=False)
+    elif file_path.endswith('.csv'):
+        obj = pd.read_csv(file_path)
+    elif file_path.endswith('.parquet') or os.path.isdir(file_path):
+        obj = pd.read_parquet(file_path)
+    else:
+        raise KeyError('File extension of {} not recognized.'.format(file_path))
+    return obj
+
+
+def read_data_change_uid(data_path, suffix, uid_cols=('src_id', 'des_id')):
+    df = read_data(data_path)
+    for col in uid_cols:
+        if col in df.columns:
+            df[col] = df[col].astype(str) + f'_{suffix}'
+    return df
+
+
+# ==============================
+# Utils for processing graph ===
+
+def get_label_edges(graph, label_edge_types):
+    label_eid_dict = {}
+    for e_type in label_edge_types:
+        label_eid_dict[e_type] = torch.arange(graph.number_of_edges(e_type))
+    return label_eid_dict
+
+
+# noinspection SpellCheckingInspection
+def remove_label_edges(graph, label_edge_types):
+    """
+    Remove label_edge_types to avoid data leakage when aggregating
     Parameters
     ----------
-    graph:
-        Graph of type dgl.DGLGraph, with all the nodes & edges.
-    fixed_params:
-        All fixed parameters. The only fixed params used are related to id types and occurrences.
-    data:
-        Object that contains node feature dataframes, ID mapping dataframes and user item interactions.
-    params:
-        Parameters used in this function include popularity & recency hyperparameters.
+    graph
+    label_edge_types
 
     Returns
     -------
-    graph:
-        The input graph but with features assigned to its nodes and edges.
+
     """
-    # Assign features
-    features_dict = import_features(data.user_feat_df,
-                                    data.user_id_df,
-                                    data.item_id_df,
-                                    fixed_params.uid_column,
-                                    fixed_params.iid_column)
-    graph.nodes['user'].data['features'] = features_dict['user']
-    graph.nodes['item'].data['features'] = features_dict['item']
+    # Method 1: clone then remove.
+    # Issue: remove edge_ids but edge_name still remain
+    adjust_graph = graph.clone()
+    for e_type in label_edge_types:
+        label_edge_ids = torch.arange(graph.number_of_edges(e_type))
+        adjust_graph.remove_edges(label_edge_ids, etype=e_type)
 
-    # add date as edge feature
-    date_col = fixed_params.date_column
-    conv_col = fixed_params.conv_column
-    if fixed_params.use_recency:
-        df = data.user_item_train_grouped
-        df['max_date'] = max(df[date_col])
-        df['days_recency'] = (pd.to_datetime(df.max_date) - pd.to_datetime(df[date_col])).dt.days + 1
-        if fixed_params.discern_clicks:
-            recency_tensor_buys = torch.tensor(df[df[conv_col] == 1].days_recency.values)
-            recency_tensor_clicks = torch.tensor(df[df[conv_col] == 0].days_recency.values)
-            graph.edges['converts'].data['recency'] = recency_tensor_buys
-            graph.edges['converted-by'].data['recency'] = recency_tensor_buys
-            graph.edges['clicks'].data['recency'] = recency_tensor_clicks
-            graph.edges['clicked-by'].data['recency'] = recency_tensor_clicks
-        else:
-            recency_tensor = torch.tensor(df.days_recency.values)
-            graph.edges['converts'].data['recency'] = recency_tensor
-            graph.edges['converted-by'].data['recency'] = recency_tensor
-
-    if fixed_params.duplicates == 'count_occurrence':
-        if fixed_params.discern_clicks:
-            graph.edges['clicks'].data['occurrence'] = torch.tensor(data.adjacency_dict['clicks_num'])
-            graph.edges['clicked-by'].data['occurrence'] = torch.tensor(data.adjacency_dict['clicks_num'])
-            graph.edges['converts'].data['occurrence'] = torch.tensor(data.adjacency_dict['converts_num'])
-            graph.edges['converted-by'].data['occurrence'] = torch.tensor(data.adjacency_dict['converts_num'])
-        else:
-            graph.edges['converts'].data['occurrence'] = torch.tensor(data.adjacency_dict['user_item_num'])
-            graph.edges['converted-by'].data['occurrence'] = torch.tensor(data.adjacency_dict['user_item_num'])
-
-    return graph
+    # Method 2: migrate edges to new graph except the label ones.
+    # Issue: `graph` & `adjust_graph` have different schema, which raise error
+    # adjust_schema = {}
+    # for edge_type in graph.canonical_etypes:
+    #     if edge_type not in label_edge_types:
+    #         src_nodes, dst_nodes, _ = graph.edges(form='all', etype=edge_type)
+    #         adjust_schema[edge_type] = (src_nodes, dst_nodes)
+    # adjust_graph = heterograph(adjust_schema)
+    return adjust_graph
 
 
-def calculate_num_batches(train_eid_dict,
-                          valid_eid_dict,
-                          sub_train_uid,
-                          valid_uid,
-                          test_uid,
-                          all_iid,
-                          edge_bs,
-                          node_bs):
-    train_eid_len = 0
-    valid_eid_len = 0
-    for e_type in train_eid_dict.keys():
-        train_eid_len += len(train_eid_dict[e_type])
-        valid_eid_len += len(valid_eid_dict[e_type])
-    num_batches_train = math.ceil(train_eid_len / edge_bs)
-    num_batches_sub_train = math.ceil(
-        (len(sub_train_uid) + len(all_iid)) / node_bs
-    )
-    num_batches_val_loss = math.ceil(valid_eid_len / edge_bs)
-    num_batches_val_metrics = math.ceil(
-        (len(valid_uid) + len(all_iid)) / node_bs
-    )
-    num_batches_test = math.ceil(
-        (len(test_uid) + len(all_iid)) / node_bs
-    )
-    return num_batches_train, num_batches_sub_train, num_batches_test, num_batches_val_loss, num_batches_val_metrics
+# =========================
+# Utils for saving data ===
+
+def mkdir_if_missing(path: str, _type: str = 'path'):
+    assert _type in ['path', 'dir'], 'type must be `path` or `dir`'
+    if _type == 'path':
+        dir_path = osp.dirname(path)
+    else:
+        dir_path = path
+    if not osp.exists(dir_path):
+        os.makedirs(dir_path, exist_ok=True)
+        return True
+    return False
 
 
-def summary_data_sets(train_eid_dict, valid_eid_dict, sub_train_uid, valid_uid, test_uid,
-                      all_iid, ground_truth_sub_train, ground_truth_valid, all_eid_dict):
-    print("train_eid.converts =", len(train_eid_dict[('user', 'converts', 'item')]))
-    print("train_eid.clicks   =", len(train_eid_dict[('user', 'clicks', 'item')]))
-    print("valid_eid.converts =", len(valid_eid_dict[('user', 'converts', 'item')]))
-    print("valid_eid.clicks   =", len(valid_eid_dict[('user', 'clicks', 'item')]))
-    print("all_eid.converts   =", len(all_eid_dict[('user', 'converts', 'item')]))
-    print("all_eid.clicks     =", len(all_eid_dict[('user', 'clicks', 'item')]))
-    print("sub_train_uid      =", len(sub_train_uid))
-    print("valid_uid          =", len(valid_uid))
-    print("test_uid           =", len(test_uid))
-    print("all_iid            =", len(all_iid))
-    print("ground_truth_sub_train.uid =", len(ground_truth_sub_train[0]))
-    print("ground_truth_sub_train.iid =", len(ground_truth_sub_train[1]))
-    print("ground_truth_valid.uid     =", len(ground_truth_valid[0]))
-    print("ground_truth_valid.iid     =", len(ground_truth_valid[1]))
+# noinspection SpellCheckingInspection
+def save_plots(metrics, save_dir):
+    """
+    Visualize train & validation loss & metrics.
+    """
+
+    save_dir = f'{save_dir}/plots'
+    mkdir_if_missing(save_dir, _type='dir')
+
+    json.dump(metrics, open(f'{save_dir}/learning_metrics.json', 'w'))
+
+    for metric_name, metric_dict in metrics.items():
+        fig = plt.figure()
+        plt.title(metric_name)
+        fig.tight_layout()
+        plt.rcParams["axes.titlesize"] = 6
+
+        epochs = np.arange(len(metric_dict[list(metric_dict.keys())[0]]))
+        for data_set, metric_list in metric_dict.items():
+            plt.plot(epochs, metric_list)
+        plt.legend(list(metric_dict.keys()))
+        plt.savefig(f'{save_dir}/{metric_name}.png')
+        plt.close(fig)
+
+
+# noinspection SpellCheckingInspection
+def save_everything(graph, model, args, metrics, dim_dict, save_dir):
+
+    save_dir = f'{save_dir}/metadata'
+    mkdir_if_missing(save_dir, _type='dir')
+
+    args = vars(args)
+    args['dim_dict'] = dim_dict
+    with open(f'{save_dir}/arguments.json', 'w') as f:
+        json.dump(args, f)
+
+    with open(f'{save_dir}/model_structure.txt', 'w') as f:
+        f.write(str(model.eval()))
+
+    with open(f'{save_dir}/graph_schema.json', 'w') as f:
+        json.dump({'canonical_etypes': graph.canonical_etypes}, f)
+
+    save_plots(metrics, save_dir=save_dir)
+
+    print("Saved graph schema, model structure, learning plots & all arguments!")

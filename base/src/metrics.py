@@ -1,4 +1,4 @@
-from src.utils import softmax
+from base.src.utils import softmax
 from collections import defaultdict
 
 import numpy as np

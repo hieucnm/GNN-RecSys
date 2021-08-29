@@ -6,11 +6,11 @@ import warnings
 
 import torch
 
-from custom.dataloaders import get_node_loader
-from custom.datasets import DataSet
-from custom.evaluation import Predictor
-from custom.logger import Logger
-from custom.models import ConvModel
+from src.dataloaders import get_node_loader
+from src.datasets import DataSet
+from src.evaluation import Predictor
+from src.logger import Logger
+from src.models import ConvModel
 
 warnings.filterwarnings('ignore')
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')

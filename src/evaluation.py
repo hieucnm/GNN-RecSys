@@ -1,226 +1,201 @@
-import random
+from collections import defaultdict
 
 import numpy as np
 import pandas as pd
-from sklearn.metrics.pairwise import cosine_similarity
+import torch
+from sklearn.metrics import roc_auc_score
 
-from src.utils import save_txt
+from src.utils_data import mkdir_if_missing
 
 
-def get_item_by_id(iid: int,
-                   pdt_id: pd.DataFrame,
-                   item_feat: pd.DataFrame,
-                   item_id_type: str):
+def repeat_tensors(x, y):
+    x_len, y_len = x.shape[0], y.shape[0]
+    x = x.repeat(1, y_len).reshape(x_len * y_len, -1)
+    y = y.repeat(x_len, 1)
+    return x, y
+
+
+def create_ground_truth_dict(ground_truth):
     """
-    Fetch information about the item, given its node_id.
+    Creates a dictionary, where the keys are user ids and the values are item ids that the user actually bought.
+    Parameters
+    ----------
+    ground_truth: tuple(list of user_nodes, list of item_nodes)
 
-    The info need to be available in the item features dataset.
+    Returns
+    -------
     """
-    # fetch old iid
-    old_iid = pdt_id[item_id_type][pdt_id.pdt_new_id == iid].item()
-    # fetch info
-    info1 = item_feat.info1[item_feat[item_id_type] == old_iid].tolist()[0]
-    info2 = item_feat.info2[item_feat[item_id_type] == old_iid].tolist()[0]
-    info3 = item_feat.info3[item_feat[item_id_type] == old_iid].tolist()[0]
-    return info1, info2, info3
+    ground_truth_dict = defaultdict(list)
+    for user_node, item_node in ground_truth:
+        ground_truth_dict[user_node].append(item_node)
+    return ground_truth_dict
 
 
-def fetch_recs_for_users(user,
-                         user_dict,
-                         pdt_id,
-                         item_feat_df,
-                         item_id_type,
-                         result_filepath,
-                         ground_truth_purchase_dict=None):
-    """
-    For all items in a dict (of recs, or already_bought, or ground_truth), fetch information.
+class Evaluator:
+    def __init__(self,
+                 model,
+                 user_id,
+                 item_id,
+                 k: int = 5,
+                 print_every: int = 1
+                 ):
+        self.model = model
+        self.user_id = user_id
+        self.item_id = item_id
+        self.k = k
+        self.print_every = print_every
 
-    """
-    for iid in user_dict[user]:
-        try:
-            info1, info2, info3 = get_item_by_id(iid, pdt_id, item_feat_df, item_id_type)
-            sentence = info1 + ', ' + info2 + info3
-            if ground_truth_purchase_dict is not None:
-                if iid in ground_truth_purchase_dict[user]:
-                    count_purchases = len([item for item in ground_truth_purchase_dict[user] if item == iid])
-                    sentence += f' ----- BOUGHT {count_purchases} TIME(S)'
-        except:
-            sentence = 'No name'
-        save_txt(sentence, result_filepath, mode='a')
+        self.embed_dim = model.embed_dim
+        self.device = next(model.parameters()).device
 
+    def _forward(self,
+                 blocks
+                 ):
+        blocks = [b.to(self.device) for b in blocks]
+        input_features = blocks[0].srcdata['features']
+        with torch.no_grad():
+            embed_dict = self.model.get_repr(blocks, input_features)
+        return embed_dict
 
-def explore_recs(recs: dict,
-                 already_bought_dict: dict,
-                 already_clicked_dict,
-                 ground_truth_dict: dict,
-                 ground_truth_purchase_dict: dict,
-                 item_feat_df: pd.DataFrame,
-                 num_choices: int,
-                 pdt_id: pd.DataFrame,
-                 item_id_type: str,
-                 result_filepath: str):
-    """
-    For a random sample of users, fetch information about what items were clicked/bought, recommended and ground truth.
+    def _get_all_item_embeddings(self,
+                                 graph,
+                                 node_loader,
+                                 ):
+        num_unique_items = graph.num_nodes(self.item_id)
+        item_embeddings = torch.zeros(num_unique_items, self.embed_dim).to(self.device)
+        for i, (_, output_nodes, blocks) in enumerate(node_loader):
+            if output_nodes[self.item_id].nelement() > 0:
+                embed_dict = self._forward(blocks)
+                if self.item_id not in embed_dict:
+                    continue
+                item_emb = embed_dict[self.item_id]
+                item_embeddings[output_nodes[self.item_id]] = item_emb
+        return item_embeddings
 
-    Users with only 1 previous click or purchase are explored at the end.
-    """
-    choices = random.sample(recs.keys(), num_choices)
+    def _get_top_k_recommends(self,
+                              user_emb,
+                              item_emb
+                              ):
 
-    for user in choices:
-        save_txt('\nCustomer bought', result_filepath, mode='a')
-        try:
-            fetch_recs_for_users(user,
-                                 already_bought_dict,
-                                 pdt_id,
-                                 item_feat_df,
-                                 item_id_type,
-                                 result_filepath)
-        except:
-            save_txt('Nothing', result_filepath, mode='a')
+        # first, repeat tensors to pass into prediction layer correctly
+        user_emb_rpt, item_emb_rpt = repeat_tensors(user_emb, item_emb)
 
-        save_txt('\nCustomer clicked on', result_filepath, mode='a')
-        try:
-            fetch_recs_for_users(user,
-                                 already_clicked_dict,
-                                 pdt_id,
-                                 item_feat_df,
-                                 item_id_type,
-                                 result_filepath)
-        except:
-            save_txt('No click data', result_filepath, mode='a')
+        with torch.no_grad():
+            similarities = self.model.get_ratings(user_emb_rpt, item_emb_rpt) \
+                .cpu().detach().numpy().reshape(-1, item_emb.shape[0])
+        recs = np.argsort(-similarities)
+        # recs = recs[:, :self.k]
+        return similarities, recs
 
-        save_txt('\nGot recommended', result_filepath, mode='a')
-        fetch_recs_for_users(user,
-                             recs,
-                             pdt_id,
-                             item_feat_df,
-                             item_id_type,
-                             result_filepath)
+    def evaluate_on_batches(self,
+                            graph,
+                            node_loader,
+                            ground_truth
+                            ):
+        item_emb = self._get_all_item_embeddings(graph, node_loader)
+        ground_truth_dict = create_ground_truth_dict(ground_truth)
 
-        save_txt('\nGround truth', result_filepath, mode='a')
-        fetch_recs_for_users(user,
-                             ground_truth_dict,
-                             pdt_id,
-                             item_feat_df,
-                             item_id_type,
-                             result_filepath,
-                             ground_truth_purchase_dict)
+        all_scores = []
+        all_labels = []
+        num_gt = 0
+        num_gt_in_rec = 0
+        rec_item_set = set()
 
-    # user with 1 item
-    choices = random.sample([uid for uid, v in already_bought_dict.items() if len(v) == 1 and uid in recs.keys()], 2)
-    for user in choices:
-        save_txt('\nCustomer bought', result_filepath, mode='a')
-        try:
-            fetch_recs_for_users(user,
-                                 already_bought_dict,
-                                 pdt_id,
-                                 item_feat_df,
-                                 item_id_type,
-                                 result_filepath)
-        except:
-            save_txt('Nothing', result_filepath, mode='a')
+        for i, (_, output_nodes, blocks) in enumerate(node_loader):
 
-        save_txt('\nCustomer clicked on', result_filepath, mode='a')
-        try:
-            fetch_recs_for_users(user,
-                                 already_clicked_dict,
-                                 pdt_id,
-                                 item_feat_df,
-                                 item_id_type,
-                                 result_filepath)
-        except:
-            save_txt('No click data', result_filepath, mode='a')
+            if (i + 1) % self.print_every == 0:
+                print("Batch {}/{}".format(i + 1, len(node_loader)))
 
-        save_txt('\nGot recommended', result_filepath, mode='a')
-        fetch_recs_for_users(user,
-                             recs,
-                             pdt_id,
-                             item_feat_df,
-                             item_id_type,
-                             result_filepath)
+            if self.user_id not in output_nodes:
+                continue
+            embed_dict = self._forward(blocks)
 
-        save_txt('\nGround truth', result_filepath, mode='a')
-        fetch_recs_for_users(user,
-                             ground_truth_dict,
-                             pdt_id,
-                             item_feat_df,
-                             item_id_type,
-                             result_filepath,
-                             ground_truth_purchase_dict)
+            user_emb = embed_dict[self.user_id]
+            similarities, top_recommends = self._get_top_k_recommends(user_emb, item_emb)
+
+            for user_node, sim, rec in zip(output_nodes[self.user_id].tolist(),
+                                           similarities,
+                                           top_recommends
+                                           ):
+
+                # for users having no label, only compute auc
+                if user_node not in ground_truth_dict:
+                    all_scores += sim.tolist()
+                    all_labels += [0] * len(sim)
+                    continue
+
+                # to compute auc
+                all_scores += sim.tolist()
+                all_labels += [int(iid in ground_truth_dict[user_node]) for iid, _ in enumerate(sim)]
+
+                # to compute accuracy (accuracy at 1, very strictly)
+                rec = rec[:len(ground_truth_dict[user_node])]
+                overlap = set(rec).intersection(ground_truth_dict[user_node])
+                num_gt_in_rec += len(overlap)
+                num_gt += len(ground_truth_dict[user_node])
+
+                # to compute coverage
+                rec_item_set.update(rec)
+
+        auc = roc_auc_score(y_true=all_labels, y_score=all_scores)
+        acc = num_gt_in_rec / num_gt
+        coverage = len(rec_item_set) / graph.num_nodes(self.item_id)
+        return acc, auc, coverage
 
 
-def explore_sports(h,
-                   sport_feat_df: pd.DataFrame,
-                   spt_id: pd.DataFrame,
-                   num_choices: int,
-                   ):
-    """
-    For a random sample of sport, fetch name of 5 most similar sports.
-    """
-    sport_h = h['sport']
-    sim_matrix = cosine_similarity(sport_h.detach().cpu())
-    choices = random.sample(range(sport_h.shape[0]), num_choices)
-    sentence = ''
-    for sid in choices:
-        # fetch name of sport id
-        try:
-            old_sid = spt_id.sport_id[spt_id.spt_new_id == sid].item()
-            chosen_name = sport_feat_df.sport_label[sport_feat_df.sport_id == old_sid].item()
-        except:
-            chosen_name = 'N/A'
-        # fetch most similar sports
-        top = np.argpartition(sim_matrix[sid], -5)[-5:]
-        top_list = spt_id.sport_id[spt_id.spt_new_id.isin(top.tolist())].tolist()
-        top_names = sport_feat_df.sport_label[sport_feat_df.sport_id.isin(top_list)].unique()
-        sentence += 'For sport {}, top similar sports are {} \n'.format(chosen_name, top_names)
-    return sentence
+class Predictor(Evaluator):
+    def __init__(self,
+                 model,
+                 user_id,
+                 item_id,
+                 save_dir,
+                 node2uid: dict,
+                 node2iid: dict,
+                 print_every: int = 1
+                 ):
+        super(Predictor, self).__init__(model=model,
+                                        user_id=user_id,
+                                        item_id=item_id,
+                                        print_every=print_every
+                                        )
+        self.node2uid = node2uid
+        self.iid_columns = [f'cate_{v}' for k, v in sorted(node2iid.items())]
+        self.emb_columns = [f'_c{i}' for i in range(self.embed_dim)]
 
+        self.save_dir = save_dir
+        self.user_embed_dir = f'{save_dir}/user_embeddings'
+        self.score_dir = f'{save_dir}/scores'
+        mkdir_if_missing(self.user_embed_dir, _type='dir')
+        mkdir_if_missing(self.score_dir, _type='dir')
 
-def check_coverage(user_item_interaction,
-                   item_feat_df,
-                   pdt_id,
-                   recs):
-    """
-    Check the repartition of types of items in the purchases vs recommendations (generic vs female vs male vs junior).
+    def _save_scores(self, scores, output_nodes, index):
+        score_df = pd.DataFrame(data=scores, columns=self.iid_columns)
+        score_df[self.user_id] = [self.node2uid[nid] for nid in output_nodes[self.user_id]]
+        score_df = score_df[[self.user_id] + self.iid_columns]
+        score_df.to_parquet(f'{self.score_dir}/part_{index:05d}.parquet')
 
-    Also checks repartition of eco-design products in purchases vs recommendations.
-    """
-    coverage_metrics = {}
+    def _save_user_embeds(self, embeds, index):
+        embed_df = pd.DataFrame(data=embeds, columns=self.emb_columns)
+        embed_df.to_parquet(f'{self.user_embed_dir}/part_{index:05d}.parquet')
 
-    # remove all 'unknown' items
-    known_items = item_feat_df.item_identifier.unique().tolist()
-    user_item_interaction = user_item_interaction[user_item_interaction.item_identifier.isin(known_items)]
+    def _save_item_embeds(self, embeds):
+        embed_df = pd.DataFrame(data=embeds, columns=self.emb_columns)
+        embed_df.to_parquet(f'{self.save_dir}/item_embeddings.parquet')
 
-    # count number of types in original dataset
-    df = user_item_interaction.merge(item_feat_df,
-                                     how='left',
-                                     on='ITEM IDENTIFIER')
-    df['is_generic'] = (df.is_junior + df.is_male + df.is_female).astype(bool) * -1 + 1
+    def predict_and_save_on_batches(self, graph, node_loader):
+        item_emb = self._get_all_item_embeddings(graph, node_loader)
+        self._save_item_embeds(item_emb)
 
-    coverage_metrics['generic_mean_whole'] = df.is_generic.mean()
-    coverage_metrics['junior_mean_whole'] = df.is_junior.mean()
-    coverage_metrics['male_mean_whole'] = df.is_male.mean()
-    coverage_metrics['female_mean_whole'] = df.is_female.mean()
-    coverage_metrics['eco_mean_whole'] = df.eco_design.mean()
+        for i, (_, output_nodes, blocks) in enumerate(node_loader):
 
-    # count in 'recs'
-    recs_df = pd.DataFrame(recs.items())
-    recs_df.columns = ['uid', 'iid']
-    recs_df = recs_df.explode('iid')
-    recs_df = recs_df.merge(pdt_id,
-                            how='left',
-                            left_on='iid',
-                            right_on='pdt_new_id')
-    recs_df = recs_df.merge(item_feat_df,
-                            how='left',
-                            on='ITEM IDENTIFIER')
+            if self.user_id not in output_nodes:
+                continue
+            embed_dict = self._forward(blocks)
 
-    recs_df['is_generic'] = (recs_df.is_junior + recs_df.is_male + recs_df.is_female).astype(bool) * -1 + 1
+            user_emb = embed_dict[self.user_id]
+            self._save_user_embeds(user_emb, i)
+            scores, _ = self._get_top_k_recommends(user_emb, item_emb)
+            self._save_scores(scores, output_nodes, i)
 
-    coverage_metrics['generic_mean_recs'] = recs_df.is_generic.mean()
-    coverage_metrics['junior_mean_recs'] = recs_df.is_junior.mean()
-    coverage_metrics['male_mean_recs'] = recs_df.is_male.mean()
-    coverage_metrics['female_mean_recs'] = recs_df.is_female.mean()
-    coverage_metrics['eco_mean_recs'] = recs_df.eco_design.mean()
-
-    return coverage_metrics
+            if (i + 1) % self.print_every == 0:
+                print("Batch {}/{}".format(i + 1, len(node_loader)))

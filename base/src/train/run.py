@@ -4,8 +4,8 @@ import time
 import dgl
 import torch
 
-from src.metrics import get_metrics_at_k
-from src.utils import save_txt
+from base.src.metrics import get_metrics_at_k
+from base.src.utils import save_txt
 
 
 def print_one_batch(batch):
