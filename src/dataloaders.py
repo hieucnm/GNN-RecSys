@@ -43,7 +43,6 @@ def get_node_loader(graph,
                     user_id,
                     item_id,
                     label_eid_dict=None,
-                    label_edge_types=None,
                     sample_size=None,
                     **params):
     """
@@ -54,7 +53,6 @@ def get_node_loader(graph,
     graph
     adjust_graph
     label_eid_dict
-    label_edge_types
     sample_size
     item_id
     params
@@ -63,18 +61,23 @@ def get_node_loader(graph,
     -------
 
     """
-    all_user_nodes = []
-    all_item_nodes = []
-    for edge_type in label_edge_types:
-        user_nodes, item_nodes = graph.find_edges(label_eid_dict[edge_type], etype=edge_type)
-        if sample_size is not None:
-            # TODO: stratified split by item_nodes (`ad_cate`)
-            _, user_nodes, _, item_nodes = train_test_split(user_nodes, item_nodes, test_size=sample_size)
-        all_user_nodes += user_nodes.tolist()
-        all_item_nodes += item_nodes.tolist()
-    ground_truth = list(zip(all_user_nodes, all_item_nodes))
+    if label_eid_dict is not None:
+        all_user_nodes = []
+        all_item_nodes = []
+        for edge_type, eid in label_eid_dict.items():
+            user_nodes, item_nodes = graph.find_edges(eid, etype=edge_type)
+            if sample_size is not None:
+                # TODO: stratified split by item_nodes (`ad_cate`)
+                _, user_nodes, _, item_nodes = train_test_split(user_nodes, item_nodes, test_size=sample_size)
+            all_user_nodes += user_nodes.tolist()
+            all_item_nodes += item_nodes.tolist()
+        ground_truth = list(zip(all_user_nodes, all_item_nodes))
+        unique_user_nodes = np.unique(all_user_nodes)
+    else:
+        # no label_eid_dict means no label, we are predicting
+        ground_truth = None
+        unique_user_nodes = np.arange(graph.num_nodes(user_id))
 
-    unique_user_nodes = np.unique(all_user_nodes)
     unique_item_nodes = np.arange(graph.num_nodes(item_id))
 
     sampler = get_neighbor_sampler(n_layer=params['n_layers'] - 1, n_neighbor=params['num_neighbors'])
@@ -89,6 +92,22 @@ def get_node_loader(graph,
     }
     node_loader = dgl.dataloading.NodeDataLoader(**node_param)
     return node_loader, ground_truth
+
+
+def get_item_node_loader(adjust_graph, item_id, **params):
+    unique_item_nodes = np.arange(adjust_graph.num_nodes(item_id))
+    sampler = get_neighbor_sampler(n_layer=params['n_layers'] - 1, n_neighbor=params['num_neighbors'])
+    node_param = {
+        'g': adjust_graph,
+        'nids': {item_id: unique_item_nodes},
+        'block_sampler': sampler,
+        'batch_size': params['node_batch_size'],
+        'shuffle': False,
+        'drop_last': False,
+        'num_workers': params['num_workers'],
+    }
+    node_loader = dgl.dataloading.NodeDataLoader(**node_param)
+    return node_loader
 
 
 # TODO: For now we use a uniform negative sampler for data loaders,

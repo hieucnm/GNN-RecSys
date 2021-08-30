@@ -57,10 +57,10 @@ class Evaluator:
             embed_dict = self.model.get_repr(blocks, input_features)
         return embed_dict
 
-    def _get_all_item_embeddings(self,
-                                 graph,
-                                 node_loader,
-                                 ):
+    def get_all_item_embeddings(self,
+                                graph,
+                                node_loader,
+                                ):
         num_unique_items = graph.num_nodes(self.item_id)
         item_embeddings = torch.zeros(num_unique_items, self.embed_dim).to(self.device)
         for i, (_, output_nodes, blocks) in enumerate(node_loader):
@@ -92,7 +92,7 @@ class Evaluator:
                             node_loader,
                             ground_truth
                             ):
-        item_emb = self._get_all_item_embeddings(graph, node_loader)
+        item_emb = self.get_all_item_embeddings(graph, node_loader)
         ground_truth_dict = create_ground_truth_dict(ground_truth)
 
         all_scores = []
@@ -149,8 +149,6 @@ class Predictor(Evaluator):
                  user_id,
                  item_id,
                  save_dir,
-                 node2uid: dict,
-                 node2iid: dict,
                  print_every: int = 1
                  ):
         super(Predictor, self).__init__(model=model,
@@ -158,34 +156,64 @@ class Predictor(Evaluator):
                                         item_id=item_id,
                                         print_every=print_every
                                         )
-        self.node2uid = node2uid
-        self.iid_columns = [f'cate_{v}' for k, v in sorted(node2iid.items())]
-        self.emb_columns = [f'_c{i}' for i in range(self.embed_dim)]
-
-        self.save_dir = save_dir
         self.user_embed_dir = f'{save_dir}/user_embeddings'
+        self.item_embed_dir = f'{save_dir}/item_embeddings'
         self.score_dir = f'{save_dir}/scores'
         mkdir_if_missing(self.user_embed_dir, _type='dir')
+        mkdir_if_missing(self.item_embed_dir, _type='dir')
         mkdir_if_missing(self.score_dir, _type='dir')
 
-    def _save_scores(self, scores, output_nodes, index):
-        score_df = pd.DataFrame(data=scores, columns=self.iid_columns)
-        score_df[self.user_id] = [self.node2uid[nid] for nid in output_nodes[self.user_id]]
-        score_df = score_df[[self.user_id] + self.iid_columns]
+    def _save_scores(self,
+                     scores,
+                     output_nodes,
+                     index,
+                     node2uid,
+                     iid_columns
+                     ):
+        score_df = pd.DataFrame(data=scores, columns=iid_columns)
+        score_df[self.user_id] = [node2uid[nid] for nid in output_nodes[self.user_id].tolist()]
+        score_df = score_df[[self.user_id] + iid_columns]
         score_df.to_parquet(f'{self.score_dir}/part_{index:05d}.parquet')
 
-    def _save_user_embeds(self, embeds, index):
-        embed_df = pd.DataFrame(data=embeds, columns=self.emb_columns)
+    def _save_user_embeds(self,
+                          embeds,
+                          output_nodes,
+                          index,
+                          node2uid
+                          ):
+        embed_df = pd.DataFrame()
+        embed_df[self.user_id] = [node2uid[nid] for nid in output_nodes[self.user_id].tolist()]
+        embed_df['embeddings'] = embeds.detach().cpu().tolist()
         embed_df.to_parquet(f'{self.user_embed_dir}/part_{index:05d}.parquet')
 
-    def _save_item_embeds(self, embeds):
-        embed_df = pd.DataFrame(data=embeds, columns=self.emb_columns)
-        embed_df.to_parquet(f'{self.save_dir}/item_embeddings.parquet')
+    def _save_item_embeds(self,
+                          embeds,
+                          node2iid,
+                          ):
+        embed_df = pd.DataFrame()
+        embed_df[self.item_id] = [node2iid[nid] for nid in range(embeds.shape[0])]
+        embed_df['embeddings'] = embeds.detach().cpu().tolist()
+        embed_df.to_parquet(f'{self.item_embed_dir}/part_00000.parquet')
 
-    def predict_and_save_on_batches(self, graph, node_loader):
-        item_emb = self._get_all_item_embeddings(graph, node_loader)
-        self._save_item_embeds(item_emb)
+    def predict_and_save_on_batches(self,
+                                    graph,
+                                    node_loader,
+                                    node2uid: dict,
+                                    node2iid: dict,
+                                    item_embed_path=None):
 
+        iid_columns = [str(v) for _, v in sorted(node2iid.items())]
+
+        if item_embed_path is None:
+            print('--> Extracting item embeddings ...')
+            item_emb = self.get_all_item_embeddings(graph, node_loader).cpu().numpy()
+        else:
+            item_emb = torch.from_numpy(np.load(item_embed_path)).to(self.device)
+            print('--> Using pre-extracted item embeddings, shape =', item_emb.shape)
+
+        self._save_item_embeds(item_emb, node2iid=node2iid)
+
+        print('--> Extracting user embeddings ...')
         for i, (_, output_nodes, blocks) in enumerate(node_loader):
 
             if self.user_id not in output_nodes:
@@ -193,9 +221,10 @@ class Predictor(Evaluator):
             embed_dict = self._forward(blocks)
 
             user_emb = embed_dict[self.user_id]
-            self._save_user_embeds(user_emb, i)
+            self._save_user_embeds(user_emb, output_nodes, i, node2uid)
+
             scores, _ = self._get_top_k_recommends(user_emb, item_emb)
-            self._save_scores(scores, output_nodes, i)
+            self._save_scores(scores, output_nodes, i, node2uid=node2uid, iid_columns=iid_columns)
 
             if (i + 1) % self.print_every == 0:
                 print("Batch {}/{}".format(i + 1, len(node_loader)))

@@ -7,7 +7,7 @@ from collections import defaultdict
 import torch
 import torch.optim
 
-from src.dataloaders import get_edge_loader, get_node_loader
+from src.dataloaders import get_edge_loader, get_node_loader, get_item_node_loader
 from src.datasets import DataSet
 from src.evaluation import Evaluator
 from src.logger import Logger
@@ -64,7 +64,6 @@ def main():
     sub_train_node_loader, sub_train_ground_truth = get_node_loader(graph=train_graph,
                                                                     adjust_graph=train_adjust_graph,
                                                                     label_eid_dict=train_label_eid,
-                                                                    label_edge_types=label_edge_types,
                                                                     user_id=train_data.user_id,
                                                                     item_id=train_data.item_id,
                                                                     sample_size=args.sub_train_sample_size,
@@ -75,7 +74,7 @@ def main():
                                                                     )
 
     print("Loading validation data ...")
-    valid_data = DataSet(data_dirs=args.valid_dirs)
+    valid_data = DataSet(data_dirs=args.valid_dirs, train_iid_map_df=train_data.iid_map_df)
     valid_graph = valid_data.init_graph()
     label_edge_types = valid_data.label_edge_types
     valid_label_eid = get_label_edges(graph=valid_graph, label_edge_types=label_edge_types)
@@ -94,7 +93,6 @@ def main():
     valid_node_loader, valid_ground_truth = get_node_loader(graph=valid_graph,
                                                             adjust_graph=valid_adjust_graph,
                                                             label_eid_dict=valid_label_eid,
-                                                            label_edge_types=label_edge_types,
                                                             user_id=valid_data.user_id,
                                                             item_id=valid_data.item_id,
                                                             num_neighbors=args.num_neighbors,
@@ -184,7 +182,24 @@ def main():
         metrics['Coverage']['training'].append(train_coverage)
         metrics['Coverage']['validation'].append(val_coverage)
 
-    save_everything(train_graph, model, args, metrics, dim_dict, result_dir)
+    # Pre-extract item embeddings
+    item_node_loader = get_item_node_loader(adjust_graph=train_adjust_graph,
+                                            item_id=train_data.item_id,
+                                            num_neighbors=args.num_neighbors,
+                                            n_layers=args.n_layers,
+                                            node_batch_size=args.node_batch_size,
+                                            num_workers=args.num_workers
+                                            )
+    item_embeds = evaluator.get_all_item_embeddings(train_adjust_graph, item_node_loader).cpu()
+    save_everything(graph=train_graph,
+                    model=model,
+                    args=args,
+                    metrics=metrics,
+                    dim_dict=dim_dict,
+                    iid_map_df=train_data.iid_map_df,
+                    item_embeds=item_embeds,
+                    save_dir=result_dir
+                    )
     print(f'Finish training! Elapsed time: {dt.datetime.now().replace(microsecond=0) - start_time}')
 
 
@@ -215,11 +230,11 @@ parser.add_argument('--loss', type=str, default='hinge', choices=['hinge', 'bce'
 parser.add_argument('--delta', type=float, default=0.2, help='Margin in hinge loss if used')
 parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
 parser.add_argument('--weight-decay', type=float, default=1e-5, help='Weight decay in SGD')
-parser.add_argument('--num-epochs', type=int, default=4, help='Number of epochs')
-parser.add_argument('--print-every', type=int, default=4, help='Print loss every these iterations')
-parser.add_argument('--neg-sample-size', type=int, default=32, help='Number of samples when doing negative sampling')
-parser.add_argument('--edge-batch-size', type=int, default=128, help='Number of edges in a batch')
-parser.add_argument('--node-batch-size', type=int, default=128, help='Number of nodes in a batch')
+parser.add_argument('--num-epochs', type=int, default=2, help='Number of epochs')
+parser.add_argument('--print-every', type=int, default=10, help='Print loss every these iterations')
+parser.add_argument('--neg-sample-size', type=int, default=64, help='Number of samples when doing negative sampling')
+parser.add_argument('--edge-batch-size', type=int, default=1024, help='Number of edges in a batch')
+parser.add_argument('--node-batch-size', type=int, default=1024, help='Number of nodes in a batch')
 parser.add_argument('--precision-at-k', type=int, default=5, help='Precision/Recall at k to evaluate (deprecated)')
 parser.add_argument('--num-workers', type=int, default=8, help='Number of cores of CPU to use')
 parser.add_argument('--use-ddp', action='store_true', default=False, help='Only use for multi-GPU')
@@ -234,7 +249,7 @@ parser.add_argument('--num-neighbors', type=int, default=256,
 #   pred: cos
 #   num-neighbors: 256
 #   delta: 0.2 (the higher, the more epochs. 0.1 worse, didn't try 0.3)
-#   neg-sample-size: 32
+#   neg-sample-size: 64
 
 if __name__ == '__main__':
     args = parser.parse_args()

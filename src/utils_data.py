@@ -158,15 +158,10 @@ def save_plots(metrics, save_dir):
 
 
 # noinspection SpellCheckingInspection
-def save_everything(graph, model, args, metrics, dim_dict, save_dir):
+def save_everything(graph, model, args, metrics, dim_dict, iid_map_df, item_embeds, save_dir):
 
     save_dir = f'{save_dir}/metadata'
     mkdir_if_missing(save_dir, _type='dir')
-
-    args = vars(args)
-    args['dim_dict'] = dim_dict
-    with open(f'{save_dir}/arguments.json', 'w') as f:
-        json.dump(args, f)
 
     with open(f'{save_dir}/model_structure.txt', 'w') as f:
         f.write(str(model.eval()))
@@ -174,6 +169,14 @@ def save_everything(graph, model, args, metrics, dim_dict, save_dir):
     with open(f'{save_dir}/graph_schema.json', 'w') as f:
         json.dump({'canonical_etypes': graph.canonical_etypes}, f)
 
+    iid_map_df.to_csv(f'{save_dir}/train_iid_map_df.csv', index=False)
+    np.save(f'{save_dir}/item_embeddings.npy', np.asarray(item_embeds))
+
+    args = vars(args)
+    args['dim_dict'] = dim_dict
+    with open(f'{save_dir}/arguments.json', 'w') as f:
+        json.dump(args, f)
+
     save_plots(metrics, save_dir=save_dir)
 
-    print("Saved graph schema, model structure, learning plots & all arguments!")
+    print("Saved graph schema, model structure, learning plots, item_id mapper & all arguments!")
