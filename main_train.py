@@ -8,7 +8,7 @@ import torch
 import torch.optim
 
 from src.dataloaders import get_edge_loader, get_node_loader, get_item_node_loader
-from src.datasets import DataSet
+from src.datasets import TrainDataSet
 from src.evaluation import Evaluator
 from src.logger import Logger
 from src.losses import MaxMarginLoss, BCELossCustom
@@ -40,7 +40,7 @@ def main():
     print(f'All arguments: {args}')
 
     print("Loading training data ...")
-    train_data = DataSet(data_dirs=args.train_dirs)
+    train_data = TrainDataSet(data_dirs=args.train_dirs)
     train_data.load_data()
     train_graph = train_data.init_graph()
     label_edge_types = train_data.label_edge_types
@@ -71,7 +71,7 @@ def main():
                                                                     )
 
     print("Loading validation data ...")
-    valid_data = DataSet(data_dirs=args.valid_dirs, train_iid_map_df=train_data.iid_map_df)
+    valid_data = TrainDataSet(data_dirs=args.valid_dirs, train_iid_map_df=train_data.iid_map_df)
     valid_data.load_data()
     valid_graph = valid_data.init_graph()
     valid_label_eid = get_label_edges(graph=valid_graph, label_edge_types=label_edge_types)

@@ -7,7 +7,7 @@ import warnings
 import torch
 
 from src.dataloaders import get_node_loader
-from src.datasets import InferenceDataSetV2
+from src.datasets import InferenceDataSet
 from src.evaluation import Predictor
 from src.logger import Logger
 from src.models import ConvModel
@@ -39,12 +39,16 @@ def main():
     print(f'Infer arguments: {args}')
     print(f'Saved arguments: {params}')
 
+    df_group = read_data(args.data_dir.rstrip('/') + '/group_chat.parquet')
+    df_ad = read_data(args.data_dir.rstrip('/') + '/ad_chat.parquet')
+
     # TODO: not only predict-in-batches, but also load_data-in-batch
+    #   split user_feature into files, then loop over them and predict
 
     print("Loading inference data ...")
-    data = InferenceDataSetV2(data_dirs=args.data_dir,
-                              train_iid_map_df=train_iid_map_df
-                              )
+    data = InferenceDataSet(data_dirs=args.data_dir,
+                            train_iid_map_df=train_iid_map_df
+                            )
     graph = data.init_graph()
     node_loader, _ = get_node_loader(graph=graph,
                                      adjust_graph=graph,
