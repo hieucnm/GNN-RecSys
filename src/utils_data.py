@@ -12,12 +12,12 @@ import torch
 # ==========================
 # Utils for reading data ===
 
-def create_ids(df: pd.DataFrame, id_column, posfix='idx') -> pd.DataFrame:
-    id_new_col = f"{id_column}_{posfix}"
+def create_ids(df: pd.DataFrame, id_column, suffix='idx'):
+    id_new_col = f"{id_column}_{suffix}"
     id_map_df = pd.DataFrame(df[id_column].unique(), columns=[id_column])
     id_map_df[id_new_col] = id_map_df.index
     df = df.merge(id_map_df, on=id_column)
-    return df
+    return df, id_map_df
 
 
 def create_common_ids(df_list, id_columns, suffix='idx'):
@@ -75,6 +75,10 @@ def read_data_change_uid(data_path, suffix, uid_cols=('src_id', 'des_id')):
             df[col] = df[col].astype(str) + f'_{suffix}'
     return df
 
+
+def read_data_from_multiple_dirs(dir_list, filename):
+    return pd.concat([read_data_change_uid(f'{data_dir}/{filename}', index)
+                      for index, data_dir in enumerate(dir_list)]).reset_index(drop=True)
 
 # ==============================
 # Utils for processing graph ===

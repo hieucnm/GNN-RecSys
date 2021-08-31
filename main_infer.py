@@ -7,7 +7,7 @@ import warnings
 import torch
 
 from src.dataloaders import get_node_loader
-from src.datasets import DataSet
+from src.datasets import InferenceDataSetV2
 from src.evaluation import Predictor
 from src.logger import Logger
 from src.models import ConvModel
@@ -29,7 +29,7 @@ def main():
     # Redirect print to both console and log file
     timestamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
     result_dir = f'{args.result_dir}/{timestamp}'
-    sys.stdout = Logger(f'{result_dir}/running_log.txt')
+    # sys.stdout = Logger(f'{result_dir}/running_log.txt')
     print(f'Everything will be saved to {result_dir}')
 
     params = json.load(open(args.param_path))
@@ -42,10 +42,9 @@ def main():
     # TODO: not only predict-in-batches, but also load_data-in-batch
 
     print("Loading inference data ...")
-    data = DataSet(data_dirs=args.data_dir,
-                   train_iid_map_df=train_iid_map_df,
-                   has_label=False
-                   )
+    data = InferenceDataSetV2(data_dirs=args.data_dir,
+                              train_iid_map_df=train_iid_map_df
+                              )
     graph = data.init_graph()
     node_loader, _ = get_node_loader(graph=graph,
                                      adjust_graph=graph,
@@ -99,7 +98,7 @@ parser.add_argument('--item-embed-path',  type=str, help='Path of the pre-calcul
 parser.add_argument('--data-dir',  type=str, help='Directory containing inference data')
 parser.add_argument('--result-dir', type=str, default='examples/results', help='Directory to save everything')
 parser.add_argument('--print-every', type=int, default=10, help='Print loss every these iterations')
-parser.add_argument('--node-batch-size', type=int, default=2048, help='Number of nodes in a batch')
+parser.add_argument('--node-batch-size', type=int, default=1024, help='Number of nodes in a batch')
 parser.add_argument('--num-workers', type=int, default=8, help='Number of cores of CPU to use')
 
 

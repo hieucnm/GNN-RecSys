@@ -39,12 +39,9 @@ def main():
     print(f'Using device: {device.type}')
     print(f'All arguments: {args}')
 
-    # TODO: there are users had no interactions on group_chat nor ad, but they were removed
-    #   due to the inner join in the class `Dataset`. In another word, we didn't train on isolated nodes.
-    #   Fix this.
-
     print("Loading training data ...")
     train_data = DataSet(data_dirs=args.train_dirs)
+    train_data.load_data()
     train_graph = train_data.init_graph()
     label_edge_types = train_data.label_edge_types
     train_label_eid = get_label_edges(graph=train_graph, label_edge_types=label_edge_types)
@@ -75,8 +72,8 @@ def main():
 
     print("Loading validation data ...")
     valid_data = DataSet(data_dirs=args.valid_dirs, train_iid_map_df=train_data.iid_map_df)
+    valid_data.load_data()
     valid_graph = valid_data.init_graph()
-    label_edge_types = valid_data.label_edge_types
     valid_label_eid = get_label_edges(graph=valid_graph, label_edge_types=label_edge_types)
     valid_adjust_graph = remove_label_edges(graph=valid_graph, label_edge_types=label_edge_types)
 
