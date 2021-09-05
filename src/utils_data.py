@@ -1,12 +1,13 @@
 import json
 import os
 import os.path as osp
-import pickle
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import torch
+import datetime as dt
+import re
 
 
 # ==========================
@@ -80,6 +81,7 @@ def read_data_from_multiple_dirs(dir_list, filename):
     return pd.concat([read_data_change_uid(f'{data_dir}/{filename}', index)
                       for index, data_dir in enumerate(dir_list)]).reset_index(drop=True)
 
+
 # ==============================
 # Utils for processing graph ===
 
@@ -136,6 +138,24 @@ def mkdir_if_missing(path: str, _type: str = 'path'):
     return False
 
 
+def seed_everything():
+    seed = 42
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
+
+# noinspection PyBroadException
+def dir_with_timestamp(root_dir, data_dir=None):
+    timestamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
+    try:
+        infer_date = re.search("(\d{4}/\d{2}/\d{2})", data_dir)
+        result_dir = f'{root_dir}/{infer_date.group(0)}/{timestamp}'
+    except:
+        result_dir = f'{root_dir}/{timestamp}'
+    return result_dir
+
+
 # noinspection SpellCheckingInspection
 def save_plots(metrics, save_dir):
     """
@@ -162,7 +182,7 @@ def save_plots(metrics, save_dir):
 
 
 # noinspection SpellCheckingInspection
-def save_everything(graph, model, args, metrics, dim_dict, iid_map_df, item_embeds, save_dir):
+def save_everything(graph, model, args, metrics, dim_dict, train_data, item_embed, save_dir):
 
     save_dir = f'{save_dir}/metadata'
     mkdir_if_missing(save_dir, _type='dir')
@@ -173,8 +193,13 @@ def save_everything(graph, model, args, metrics, dim_dict, iid_map_df, item_embe
     with open(f'{save_dir}/graph_schema.json', 'w') as f:
         json.dump({'canonical_etypes': graph.canonical_etypes}, f)
 
-    iid_map_df.to_csv(f'{save_dir}/train_iid_map_df.csv', index=False)
-    np.save(f'{save_dir}/item_embeddings.npy', np.asarray(item_embeds))
+    train_data.iid_map_df.to_csv(f'{save_dir}/train_iid_map_df.csv', index=False)
+    np.save(f'{save_dir}/item_embeddings.npy', np.asarray(item_embed))
+    save_item_embed_df(item_emb=item_embed,
+                       node2iid=train_data.node2item,
+                       item_id=train_data.item_id,
+                       save_path=f'{save_dir}/item_embedding.parquet'
+                       )
 
     args = vars(args)
     args['dim_dict'] = dim_dict
@@ -184,3 +209,19 @@ def save_everything(graph, model, args, metrics, dim_dict, iid_map_df, item_embe
     save_plots(metrics, save_dir=save_dir)
 
     print("Saved graph schema, model structure, learning plots, item_id mapper & all arguments!")
+
+
+def save_item_embed_df(item_emb, node2iid, item_id, save_path):
+    embed_df = pd.DataFrame()
+    embed_df[item_id] = [node2iid[nid] for nid in range(item_emb.shape[0])]
+    if item_emb.is_cuda:
+        item_emb = item_emb.detach()
+    embed_df['embeddings'] = item_emb.cpu().tolist()
+    embed_df.to_parquet(save_path)
+
+
+def save_inference_result(user_emb_df, score_df, save_dir, filename):
+    mkdir_if_missing(f'{save_dir}/user_embeddings')
+    mkdir_if_missing(f'{save_dir}/scores')
+    user_emb_df.to_parquet(f'{save_dir}/user_embeddings/{filename}')
+    score_df.to_parquet(f'{save_dir}/scores/{filename}')
