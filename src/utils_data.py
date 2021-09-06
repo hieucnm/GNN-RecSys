@@ -220,8 +220,13 @@ def save_item_embed_df(item_emb, node2iid, item_id, save_path):
     embed_df.to_parquet(save_path)
 
 
-def save_inference_result(user_emb_df, score_df, save_dir, filename):
-    mkdir_if_missing(f'{save_dir}/user_embeddings')
-    mkdir_if_missing(f'{save_dir}/scores')
-    user_emb_df.to_parquet(f'{save_dir}/user_embeddings/{filename}')
-    score_df.to_parquet(f'{save_dir}/scores/{filename}')
+def save_inference_result(user_emb_df: pd.DataFrame, score_df: pd.DataFrame, save_dir: str, filename: str):
+    if not filename.endswith('parquet'):
+        filename = filename + '.parquet'
+
+    embed_path = f'{save_dir}/user_embeddings/{filename}'
+    mkdir_if_missing(embed_path)
+    user_emb_df.to_parquet(embed_path)
+    score_path = f'{save_dir}/scores/{filename}'
+    mkdir_if_missing(score_path)
+    score_df.to_parquet(score_path)

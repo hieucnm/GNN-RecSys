@@ -198,8 +198,8 @@ class Predictor(BaseEvaluator):
         self.item_emb = item_emb
         if not self.item_emb.is_cuda:
             self.item_emb = self.item_emb.to(self.device)
+        self.iid_columns = [str(c) for c in iid_columns]
         self._verify_num_items()
-        self.iid_columns = iid_columns
 
     # Just implement the abstract method
     def _create_ground_truth_dict(self, ground_truth_dict):
