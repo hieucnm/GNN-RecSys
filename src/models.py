@@ -355,7 +355,7 @@ class ConvModel(nn.Module):
     """
 
     def __init__(self,
-                 graph,
+                 edge_types,
                  dim_dict,
                  user_id: str,
                  item_id: str,
@@ -363,7 +363,6 @@ class ConvModel(nn.Module):
                  aggregator_homo: str,
                  aggregator_hetero: str,
                  n_layers: int,
-                 label_edge_types,
                  norm: bool = True,
                  dropout: float = 0.0,
                  ):
@@ -399,14 +398,14 @@ class ConvModel(nn.Module):
         # hidden layers
         for i in range(n_layers - 2):
             self.layers.append(dglnn.HeteroGraphConv({
-                edge_type[1]:
+                e_type[1]:
                     ConvLayer(
                          in_feats=(dim_dict['hidden'], dim_dict['hidden']),
                          out_feats=dim_dict['hidden'],
                          dropout=dropout,
                          aggregator_type=aggregator_homo,
                          norm=norm)
-                for edge_type in graph.canonical_etypes if edge_type not in label_edge_types},
+                for e_type in edge_types},
                 aggregate=aggregator_hetero
             ))
 
@@ -419,7 +418,7 @@ class ConvModel(nn.Module):
                     dropout=dropout,
                     aggregator_type=aggregator_homo,
                     norm=norm)
-            for e_type in graph.canonical_etypes if e_type not in label_edge_types},
+            for e_type in edge_types},
             aggregate=aggregator_hetero
         ))
 

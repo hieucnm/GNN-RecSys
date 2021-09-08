@@ -64,6 +64,8 @@ def read_data(file_path):
         obj = pd.read_csv(file_path)
     elif file_path.endswith('.parquet') or os.path.isdir(file_path):
         obj = pd.read_parquet(file_path)
+    elif file_path.endswith('json'):
+        obj = json.load(open(file_path))
     else:
         raise KeyError('File extension of {} not recognized.'.format(file_path))
     return obj
@@ -190,8 +192,12 @@ def save_everything(graph, model, args, metrics, dim_dict, train_data, item_embe
     with open(f'{save_dir}/model_structure.txt', 'w') as f:
         f.write(str(model.eval()))
 
-    with open(f'{save_dir}/graph_schema.json', 'w') as f:
-        json.dump({'canonical_etypes': graph.canonical_etypes}, f)
+    with open(f'{save_dir}/schemas.json', 'w') as f:
+        json.dump({'graph_schema': graph.canonical_etypes,
+                   'model_schema': train_data.model_edge_types,
+                   'user_id': 'src_id',
+                   'item_id': 'ad_cate'
+                   }, f)
 
     train_data.iid_map_df.to_csv(f'{save_dir}/train_iid_map_df.csv', index=False)
     np.save(f'{save_dir}/item_embeddings.npy', np.asarray(item_embed))

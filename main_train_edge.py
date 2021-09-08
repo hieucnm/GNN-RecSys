@@ -118,9 +118,8 @@ def main():
                 'out': args.out_dim,
                 'hidden': args.hidden_dim}
 
-    model = ConvModel(graph=train_data.graph,
+    model = ConvModel(edge_types=train_data.model_edge_types,
                       dim_dict=dim_dict,
-                      label_edge_types=train_data.label_edge_types,
                       n_layers=args.n_layers,
                       pred=args.pred,
                       norm=True,
