@@ -71,17 +71,21 @@ def read_data(file_path):
     return obj
 
 
-def read_data_change_uid(data_path, suffix, uid_cols=('src_id', 'des_id')):
-    df = read_data(data_path)
-    for col in uid_cols:
+def rename_id(df, suffix, id_cols):
+    for col in id_cols:
         if col in df.columns:
+            # df[f'{col}_raw'] = df[col]
             df[col] = df[col].astype(str) + f'_{suffix}'
     return df
 
 
-def read_data_from_multiple_dirs(dir_list, filename):
-    return pd.concat([read_data_change_uid(f'{data_dir}/{filename}', index)
-                      for index, data_dir in enumerate(dir_list)]).reset_index(drop=True)
+def read_data_rename_id(dir_list, filename, id_cols):
+    df_list = []
+    for index, data_dir in enumerate(dir_list):
+        df = read_data(f'{data_dir}/{filename}')
+        df = rename_id(df, index, id_cols)
+        df_list.append(df)
+    return pd.concat(df_list).reset_index(drop=True)
 
 
 # ==============================
@@ -183,6 +187,20 @@ def save_plots(metrics, save_dir):
         plt.close(fig)
 
 
+def get_mean_item_embed(iid_map_df: pd.DataFrame, item_embed: np.ndarray, item_id: str):
+    # must consistent with read_data_change_uid
+    if f'{item_id}_raw' not in iid_map_df.columns:
+        # we didn't rename item_ids, each item has only 1 embedding, so we dont need to average anymore
+        return iid_map_df, item_embed
+
+    iid_map_df = iid_map_df.sort_values(by=f'{item_id}_idx').reset_index(drop=True)
+    iid_map_df['embed'] = item_embed
+    res = iid_map_df.groupby(f'{item_id}_raw')['embed'].apply(lambda x: np.mean(list(x), axis=0))
+    final_item_embed = np.vstack(res.values)
+    final_iid_map_df = pd.DataFrame({item_id: res.index, f'{item_id}_idx': range(len(res))})
+    return final_iid_map_df, final_item_embed
+
+
 # noinspection SpellCheckingInspection
 def save_everything(graph, model, args, metrics, dim_dict, train_data, item_embed, save_dir):
 
@@ -202,8 +220,11 @@ def save_everything(graph, model, args, metrics, dim_dict, train_data, item_embe
                    'item_id': 'ad_cate'
                    }, f)
 
-    train_data.iid_map_df.to_csv(f'{save_dir}/train_iid_map_df.csv', index=False)
-    np.save(f'{save_dir}/item_embeddings.npy', np.asarray(item_embed))
+    if isinstance(item_embed, torch.Tensor):
+        item_embed = item_embed.detach().cpu().numpy()
+    iid_map_df, item_embed = get_mean_item_embed(train_data.iid_map_df, item_embed, train_data.item_id)
+    iid_map_df.to_csv(f'{save_dir}/train_iid_map_df.csv', index=False)
+    np.save(f'{save_dir}/item_embeddings.npy', item_embed)
     save_item_embed_df(item_emb=item_embed,
                        node2iid=train_data.node2item,
                        item_id=train_data.item_id,
@@ -223,9 +244,7 @@ def save_everything(graph, model, args, metrics, dim_dict, train_data, item_embe
 def save_item_embed_df(item_emb, node2iid, item_id, save_path):
     embed_df = pd.DataFrame()
     embed_df[item_id] = [node2iid[nid] for nid in range(item_emb.shape[0])]
-    if item_emb.is_cuda:
-        item_emb = item_emb.detach()
-    embed_df['embeddings'] = item_emb.cpu().tolist()
+    embed_df['embeddings'] = item_emb.tolist()
     embed_df.to_parquet(save_path)
 
 

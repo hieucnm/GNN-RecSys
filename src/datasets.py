@@ -1,7 +1,7 @@
 import pandas as pd
 import torch
 from dgl import heterograph
-from src.utils_data import create_common_ids, read_data_from_multiple_dirs, read_data
+from src.utils_data import create_common_ids, read_data_rename_id, read_data
 
 
 class BaseDataSet:
@@ -97,6 +97,10 @@ class BaseDataSet:
             # dummy data, to report only
             df_label_1 = pd.DataFrame(columns=[self.user_id, self.item_id])
             df_label_0 = pd.DataFrame(columns=[self.user_id, self.item_id])
+
+        n_raw_items = self.iid_map_df[self.item_id].apply(lambda x: str(x).split('_')[0]).nunique()
+        n_raw_users = self.uid_map_df[self.user_id].apply(lambda x: str(x).split('_')[0]).nunique()
+
         summary = "========================= Data Summary =========================\n" \
                   "- group_chat: #rows = {:8d}\n" \
                   "- ad_click  : #rows = {:8d} | #users = {:8d} | #items = {:3d}\n" \
@@ -104,6 +108,7 @@ class BaseDataSet:
                   "- label_1   : #rows = {:8d} | #users = {:8d} | #items = {:3d}\n" \
                   "- label_0   : #rows = {:8d} | #users = {:8d} | #items = {:3d}\n" \
                   "- Union     :         {:8s} | #users = {:8d} | #items = {:3d}\n" \
+                  "- Union raw :         {:8s} | #users = {:8d} | #items = {:3d}\n" \
                   "- user_feats:         {:8s} | #users = {:8d} | #feats = {:3d}".format(
             df_group.shape[0],
             df_click.shape[0], df_click[self.user_id].nunique(), df_click[self.item_id].nunique(),
@@ -111,6 +116,7 @@ class BaseDataSet:
             df_label_1.shape[0], df_label_1[self.user_id].nunique(), df_label_1[self.item_id].nunique(),
             df_label_0.shape[0], df_label_0[self.user_id].nunique(), df_label_0[self.item_id].nunique(),
             '', self.uid_map_df.shape[0], self.iid_map_df.shape[0],
+            '', n_raw_users, n_raw_items,
             '', self.feature_dict[self.user_id].shape[0], self.feature_dict[self.user_id].shape[1] - 1
         )
         print(summary)
@@ -164,11 +170,17 @@ class BaseDataSet:
             e_type for e_type in self.graph.canonical_etypes if e_type not in label_edge_types
         ]
 
-    def _use_train_iid_map(self, df_list, train_iid_map_df):
+    def _use_train_iid_map(self, df_list):
         for df in df_list:
             df = df.drop(columns=[f'{self.item_id}_{self.new_id_suffix}'])
-            df = df.merge(train_iid_map_df, on=self.item_id)
+            df = df.merge(self.train_iid_map_df, on=self.item_id)
             yield df
+
+    def _transform_train_iid_df(self):
+        if f'{self.item_id}_raw' not in self.train_iid_map_df.columns:
+            self.train_iid_map_df = self.train_iid_map_df[[self.item_id, f'{self.item_id}_{self.new_id_suffix}']]
+        # TODO: resolve the index problem if we rename the item_id (hint: must include the item_embedding)
+        self.train_iid_map_df = self.train_iid_map_df[[self.item_id, f'{self.item_id}_{self.new_id_suffix}']]
 
     def _verify_all_user_feature_exist(self, user_feature, user_data_list):
         id_set = set()
@@ -201,8 +213,9 @@ class BaseDataSet:
 
         # Ensure index of items in this dataset is the same as that in the training dataset
         if self.train_iid_map_df is not None:
+            self._transform_train_iid_df()
             iid_map_df = self.train_iid_map_df
-            df_ad, df_label = self._use_train_iid_map([df_ad, df_label], self.train_iid_map_df)
+            df_ad, df_label = self._use_train_iid_map([df_ad, df_label])
 
         data_dict = {
             'group_chat': df_group,
@@ -217,8 +230,9 @@ class BaseDataSet:
         self.uid_map_df = uid_map_df
         self.iid_map_df = iid_map_df
 
-        user_feature = user_feature.sort_values(by=f'{self.user_id}_{self.new_id_suffix}', ascending=True) \
-            .drop(columns=[self.user_id, f'{self.user_id}_{self.new_id_suffix}'])
+        user_feature = user_feature.sort_values(by=f'{self.user_id}_{self.new_id_suffix}', ascending=True)
+        uid_cols = [c for c in user_feature.columns if self.user_id in c]
+        user_feature = user_feature.drop(columns=uid_cols)
         user_feature = torch.tensor(user_feature.values).float()
 
         item_feature = torch.tensor(list(range(iid_map_df.shape[0]))).long()
@@ -236,19 +250,23 @@ class BaseDataSet:
 
 
 class TrainDataSet(BaseDataSet):
-    def __init__(self, data_dirs, train_iid_map_df=None):
+    def __init__(self, data_dirs, train_iid_map_df=None, rename_item_id=False):
         super(TrainDataSet, self).__init__(has_label=True, train_iid_map_df=train_iid_map_df)
-        self.train_iid_map_df = train_iid_map_df
         self.data_dirs = [x.rstrip('/') for x in data_dirs.split(',')]
+        self.rename_item_id = rename_item_id
 
     def _load_data(self):
         if len(self.data_dirs) > 1:
-            df_ad = read_data_from_multiple_dirs(dir_list=self.data_dirs, filename='ad.parquet')
-            df_group = read_data_from_multiple_dirs(dir_list=self.data_dirs, filename='group_chat.parquet')
-            user_feature = read_data_from_multiple_dirs(dir_list=self.data_dirs, filename='user_features.parquet')
-            df_label = read_data_from_multiple_dirs(dir_list=self.data_dirs, filename='label.parquet')
+            id_cols = ['src_id', 'des_id']
+            if self.rename_item_id:
+                id_cols.append(self.item_id)
+
+            df_ad = read_data_rename_id(self.data_dirs, 'ad.parquet', id_cols)
+            df_group = read_data_rename_id(self.data_dirs, 'group_chat.parquet', id_cols)
+            user_feature = read_data_rename_id(self.data_dirs, 'user_features.parquet', id_cols)
+            df_label = read_data_rename_id(self.data_dirs, 'label.parquet', id_cols)
         else:
-            # if only 1 data_dir, don't need rename user_id
+            # if only 1 data_dir, don't rename user_id
             data_dir = self.data_dirs[0]
             df_ad = read_data(data_dir + '/ad.parquet')
             df_group = read_data(data_dir + '/group_chat.parquet')
@@ -259,8 +277,7 @@ class TrainDataSet(BaseDataSet):
 
 class InferenceDataSet(BaseDataSet):
     def __init__(self, train_iid_map_df, df_group, df_ad, user_feature, to_infer_uid_df=None):
-        super(InferenceDataSet, self).__init__(has_label=False)
-        self.train_iid_map_df = train_iid_map_df
+        super(InferenceDataSet, self).__init__(has_label=False, train_iid_map_df=train_iid_map_df)
         self.user_feature = user_feature
         self.df_group = df_group
         self.df_ad = df_ad

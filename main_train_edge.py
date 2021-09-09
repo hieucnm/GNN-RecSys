@@ -42,7 +42,7 @@ def main():
     print(f'All arguments: {args}')
 
     print("Loading training data ...")
-    train_data = TrainDataSet(data_dirs=args.train_dirs)
+    train_data = TrainDataSet(data_dirs=args.train_dirs, rename_item_id=args.rename_item)
     train_data.load_data()
     train_data.init_graph()
     train_data.init_adjust_graph()
@@ -210,14 +210,14 @@ def main():
             metrics[f'AUC {node2item[item_nid]}']['validation'].append(auc)
 
         # Save every epoch, not after all epochs
-        item_embeds = evaluator.get_all_item_embeddings(train_data.adjust_graph, item_node_loader).cpu()
+        item_embed = evaluator.get_all_item_embeddings(train_data.adjust_graph, item_node_loader)
         save_everything(graph=train_data.graph,
                         model=model,
                         args=args,
                         metrics=metrics,
                         dim_dict=dim_dict,
                         train_data=train_data,
-                        item_embed=item_embeds,
+                        item_embed=item_embed,
                         save_dir=result_dir
                         )
     print(f'Finish training! Elapsed time: {dt.datetime.now().replace(microsecond=0) - start_time}')
@@ -225,10 +225,14 @@ def main():
 
 parser = argparse.ArgumentParser("Graph Learning")
 
-# Paths
+# Datasets
 parser.add_argument('--train-dirs', type=str, help='Directories containing training data, sep by commas')
 parser.add_argument('--valid-dirs', type=str, help='Directories containing validation data, sep by commas')
 parser.add_argument('--result-dir', type=str, help='Directory to save everything')
+parser.add_argument('--rename-item', action='store_true', default=False,
+                    help='Same items in different timeframes will have different nodes or not.'
+                         'Only work for training data. For validation set, must use only 1 timeframe.'
+                         'Still meet error, dont enable.')
 
 # Model
 parser.add_argument('--n-layers', type=int, default=4, help='Number of layers, including embedding layer.')
