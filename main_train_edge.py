@@ -178,10 +178,6 @@ def main():
         print('--> Epoch {}/{}: Training ...'.format(epoch, args.num_epochs))
         train_avg_loss = trainer.train(train_edge_loader)
 
-        if epoch > 0:
-            torch.save(model.state_dict(), f'{result_dir}/model_ep_{epoch}.pth')
-            print(f"--> Model at epoch {epoch} saved!")
-
         print('--> Epoch {}/{}: Evaluating sub-train ...'.format(epoch, args.num_epochs))
         train_auc_dict = evaluator.evaluate(
             graph=train_data.graph,
@@ -213,17 +209,17 @@ def main():
         for item_nid, auc in val_auc_dict.items():
             metrics[f'AUC {node2item[item_nid]}']['validation'].append(auc)
 
-    # Save
-    item_embeds = evaluator.get_all_item_embeddings(train_data.adjust_graph, item_node_loader).cpu()
-    save_everything(graph=train_data.graph,
-                    model=model,
-                    args=args,
-                    metrics=metrics,
-                    dim_dict=dim_dict,
-                    train_data=train_data,
-                    item_embed=item_embeds,
-                    save_dir=result_dir
-                    )
+        # Save every epoch, not after all epochs
+        item_embeds = evaluator.get_all_item_embeddings(train_data.adjust_graph, item_node_loader).cpu()
+        save_everything(graph=train_data.graph,
+                        model=model,
+                        args=args,
+                        metrics=metrics,
+                        dim_dict=dim_dict,
+                        train_data=train_data,
+                        item_embed=item_embeds,
+                        save_dir=result_dir
+                        )
     print(f'Finish training! Elapsed time: {dt.datetime.now().replace(microsecond=0) - start_time}')
 
 

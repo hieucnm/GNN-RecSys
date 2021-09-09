@@ -186,6 +186,9 @@ def save_plots(metrics, save_dir):
 # noinspection SpellCheckingInspection
 def save_everything(graph, model, args, metrics, dim_dict, train_data, item_embed, save_dir):
 
+    epoch = len([f for f in os.listdir(save_dir) if f.startswith('model_ep_')])
+    torch.save(model.state_dict(), f'{save_dir}/model_ep_{epoch}.pth')
+
     save_dir = f'{save_dir}/metadata'
     mkdir_if_missing(save_dir, _type='dir')
 
@@ -214,7 +217,7 @@ def save_everything(graph, model, args, metrics, dim_dict, train_data, item_embe
 
     save_plots(metrics, save_dir=save_dir)
 
-    print("Saved graph schema, model structure, learning plots, item_id mapper & all arguments!")
+    print(f"Saved epoch {epoch}!")
 
 
 def save_item_embed_df(item_emb, node2iid, item_id, save_path):
