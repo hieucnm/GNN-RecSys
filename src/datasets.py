@@ -257,7 +257,7 @@ class TrainDataSet(BaseDataSet):
 
     def _load_data(self):
         if len(self.data_dirs) > 1:
-            id_cols = ['src_id', 'des_id']
+            id_cols = self.user_ids
             if self.rename_item_id:
                 id_cols.append(self.item_id)
 
@@ -275,16 +275,17 @@ class TrainDataSet(BaseDataSet):
         return user_feature, df_ad, df_group, df_label
 
 
-class InferenceDataSet(BaseDataSet):
+class PredictDataSet(BaseDataSet):
     def __init__(self, train_iid_map_df, df_group, df_ad, user_feature, to_infer_uid_df=None):
-        super(InferenceDataSet, self).__init__(has_label=False, train_iid_map_df=train_iid_map_df)
+        super(PredictDataSet, self).__init__(has_label=False, train_iid_map_df=train_iid_map_df)
         self.user_feature = user_feature
         self.df_group = df_group
         self.df_ad = df_ad
 
         if to_infer_uid_df is not None:
-            self.to_infer_uid_df = to_infer_uid_df
+            to_infer_uid_df = to_infer_uid_df[[self.user_id]].drop_duplicates().reset_index(drop=True)
             self._verify_all_user_feature_exist(user_feature, [to_infer_uid_df])
+            self.to_infer_uid_df = to_infer_uid_df
         else:
             self.to_infer_uid_df = user_feature[[self.user_id]]
 

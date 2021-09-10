@@ -152,14 +152,19 @@ def seed_everything():
 
 
 # noinspection PyBroadException
+def get_date(path):
+    try:
+        return re.search("(\d{4}/\d{2}/\d{2})", path).group(0)
+    except:
+        return None
+
+
 def dir_with_timestamp(root_dir, data_dir=None):
     timestamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
-    try:
-        infer_date = re.search("(\d{4}/\d{2}/\d{2})", data_dir)
-        result_dir = f'{root_dir}/{infer_date.group(0)}/{timestamp}'
-    except:
-        result_dir = f'{root_dir}/{timestamp}'
-    return result_dir
+    data_date = get_date(data_dir)
+    if data_date:
+        return f'{root_dir}/{timestamp}/{data_date}'
+    return f'{root_dir}/{timestamp}'
 
 
 # noinspection SpellCheckingInspection
