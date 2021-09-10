@@ -231,7 +231,16 @@ class Predictor(BaseEvaluator):
                               ):
         embed_df = pd.DataFrame()
         embed_df[self.user_id] = [node2uid[nid] for nid in output_nodes[self.user_id].tolist()]
-        embed_df['embeddings'] = embeds.detach().cpu().tolist()
+        embed_df[self.user_id] = embed_df[self.user_id].astype(np.int32)
+        embeds = embeds.detach().cpu().float().numpy()  # use list(x.numpy()), dont use x.tolist()
+
+        # Method 1: Save embeddings as 1 column of type array[Float]
+        embed_df['embeddings'] = list(embeds)
+
+        # Method 2: Save each dimension in embeddings as 1 column of type float
+        # for i in range(self.embed_dim):
+        #     embed_df[f'_f{i}'] = embeds[:, i]
+
         return embed_df
 
     def predict(self,
