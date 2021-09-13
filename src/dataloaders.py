@@ -36,7 +36,7 @@ class IsolateBasedNegativeSampler(_BaseNegativeSampler):
 
     def _get_neg_dst(self, nid_list, e_type):
         return torch.from_numpy(np.concatenate([
-            np.random.choice(self.neg_dict[e_type][nid], self.sample_size, replace=True)
+            np.random.choice(self.neg_dict[e_type][nid], self.sample_size, replace=True).astype(np.int32)
             for i, nid in enumerate(nid_list)
         ]))
 
@@ -69,7 +69,7 @@ class EdgeBasedNegativeSampler(_BaseNegativeSampler):
     def _get_neg_dst(self, nid_list):
         self._verify_nid_exist(nid_list)
         return torch.from_numpy(np.concatenate([
-            np.random.choice(self.neg_dict[nid], size=self.sample_size, replace=True)
+            np.random.choice(self.neg_dict[nid], size=self.sample_size, replace=True).astype(np.int32)
             for nid in nid_list
         ]))
 
@@ -95,7 +95,7 @@ def get_negative_sampler(name, sample_size, graph=None, pos_etypes=None, neg_ety
 class EdgeLoaderPlus(EdgeDataLoader):
     def __init__(self, graph, adjust_graph, pos_label_etypes, neg_label_etypes=None, **params):
         label_eid_dict = {
-            e_type: torch.arange(graph.number_of_edges(e_type))
+            e_type: torch.arange(graph.number_of_edges(e_type), dtype=torch.int32)
             for e_type in pos_label_etypes
         }
         sampler = get_neighbor_sampler(params['n_layers'] - 1, params['n_neighbors'])
@@ -130,7 +130,7 @@ class EdgeLoaderPlus(EdgeDataLoader):
 def get_user_nodes_and_grountruth(graph, user_id, etypes=None, sample_size=None):
     if etypes is not None:
         label_eid_dict = {
-            e_type: torch.arange(graph.number_of_edges(e_type))
+            e_type: torch.arange(graph.number_of_edges(e_type), dtype=torch.int32)
             for e_type in etypes
         }
         all_user_nodes = []

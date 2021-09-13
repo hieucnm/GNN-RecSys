@@ -132,7 +132,7 @@ def main():
                                    print_every=args.print_every,
                                    )
 
-    print('Evaluate when no training were run :')
+    print('Evaluate before training :')
     print('--> Evaluating sub-train ...')
     train_acc, train_auc, train_coverage = evaluator.evaluate(
         graph=train_data.graph,
@@ -147,7 +147,7 @@ def main():
         item_node_loader=item_node_loader,
         ground_truth=valid_ground_truth
     )
-    report = "--> Metrics before training:\n" \
+    report = "--> Before training:\n" \
              "Training:   Acc. {:.3f}% | AUC {:.2f}% | Coverage {:.2f}%\n" \
              "Validation: Acc. {:.3f}% | AUC {:.2f}% | Coverage {:.2f}%" \
         .format(train_acc * 100, train_auc * 100, train_coverage * 100,

@@ -150,16 +150,16 @@ class BaseDataSet:
             self.user_id: self.uid_map_df.shape[0],
             self.item_id: self.iid_map_df.shape[0]
         }
-        graph = heterograph(graph_schema, num_nodes_dict=num_nodes_dict)
+        graph = heterograph(graph_schema, num_nodes_dict=num_nodes_dict, idtype=torch.int32)
         graph = self._import_feature(graph)
         self.graph = graph
 
     def init_adjust_graph(self):
         adjust_graph = self.graph.clone()
         for e_type in self.pos_label_edge_types:
-            adjust_graph.remove_edges(torch.arange(self.graph.number_of_edges(e_type)), etype=e_type)
+            adjust_graph.remove_edges(torch.arange(self.graph.number_of_edges(e_type), dtype=torch.int32), etype=e_type)
         for e_type in self.neg_label_edge_types:
-            adjust_graph.remove_edges(torch.arange(self.graph.number_of_edges(e_type)), etype=e_type)
+            adjust_graph.remove_edges(torch.arange(self.graph.number_of_edges(e_type), dtype=torch.int32), etype=e_type)
         self.adjust_graph = adjust_graph
 
     @property
@@ -235,7 +235,7 @@ class BaseDataSet:
         user_feature = user_feature.drop(columns=uid_cols)
         user_feature = torch.tensor(user_feature.values).float()
 
-        item_feature = torch.tensor(list(range(iid_map_df.shape[0]))).long()
+        item_feature = torch.tensor(list(range(iid_map_df.shape[0]))).int()
 
         self.feature_dict = {
             self.user_id: user_feature,

@@ -16,7 +16,7 @@ import re
 def create_ids(df: pd.DataFrame, id_column, suffix='idx'):
     id_new_col = f"{id_column}_{suffix}"
     id_map_df = pd.DataFrame(df[id_column].unique(), columns=[id_column])
-    id_map_df[id_new_col] = id_map_df.index
+    id_map_df[id_new_col] = pd.Series(id_map_df.index).astype(np.int32)
     df = df.merge(id_map_df, on=id_column)
     return df, id_map_df
 
@@ -32,7 +32,7 @@ def create_common_ids(df_list, id_columns, suffix='idx'):
 
     key_id = id_columns[0]
     id_map_df = pd.DataFrame(sorted(id_set), columns=[key_id])
-    id_map_df[f"{key_id}_{suffix}"] = id_map_df.index
+    id_map_df[f"{key_id}_{suffix}"] = pd.Series(id_map_df.index).astype(np.int32)
 
     df_list_res = []
     for df in df_list:

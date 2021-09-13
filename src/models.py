@@ -115,22 +115,6 @@ class ConvLayer(nn.Module):
             self.lstm = nn.LSTM(self._in_neigh_feats, self._in_neigh_feats, batch_first=True)
         self.reset_parameters()
 
-    def _lstm_reducer(self, nodes):
-        """
-        Aggregates the neighborhood messages using LSTM technique.
-
-        This was taken from DGL docs. For computation optimization, when 'batching' nodes, all nodes
-        with the same degrees are batched together, i.e. at first all nodes with 1 in-neighbor are computed
-        (thus m.shape = [number of nodes in the batchs, 1, dimensionality of h]), then all nodes with 2 in-
-        neighbors, etc.
-        """
-        m = nodes.mailbox['m']
-        batch_size = m.shape[0]
-        h = (m.new_zeros((1, batch_size, self._in_neigh_feats)),
-             m.new_zeros((1, batch_size, self._in_neigh_feats)))
-        _, (rst, _) = self.lstm(m, h)
-        return {'neigh': rst.squeeze(0)}
-
     def forward(self,
                 graph,
                 x):
@@ -158,6 +142,13 @@ class ConvLayer(nn.Module):
                 fn.mean('m', 'neigh'))
             h_neigh = graph.dstdata['neigh']
 
+        elif self._aggre_type == 'max':
+            graph.srcdata['h'] = h_neigh
+            graph.update_all(
+                fn.copy_src('h', 'm'),
+                fn.max('m', 'neigh'))
+            h_neigh = graph.dstdata['neigh']
+
         elif self._aggre_type == 'mean_nn':
             graph.srcdata['h'] = F.relu(self.fc_preagg(h_neigh))
             graph.update_all(
@@ -170,13 +161,6 @@ class ConvLayer(nn.Module):
             graph.update_all(
                 fn.copy_src('h', 'm'),
                 fn.max('m', 'neigh'))
-            h_neigh = graph.dstdata['neigh']
-
-        elif self._aggre_type == 'lstm':
-            graph.srcdata['h'] = h_neigh
-            graph.update_all(
-                fn.copy_src('h', 'm'),
-                self._lstm_reducer)
             h_neigh = graph.dstdata['neigh']
 
         elif self._aggre_type == 'mean_edge':
@@ -216,19 +200,6 @@ class ConvLayer(nn.Module):
                 graph.update_all(
                     fn.copy_src('h', 'm'),
                     fn.max('m', 'neigh'))
-            h_neigh = graph.dstdata['neigh']
-
-        elif self._aggre_type == 'lstm_edge':
-            graph.srcdata['h'] = h_neigh
-            if graph.canonical_etypes[0][0] in ['user', 'item'] and graph.canonical_etypes[0][2] in ['user', 'item']:
-                graph.edata['h'] = graph.edata['occurrence'].float().unsqueeze(1)
-                graph.update_all(
-                    fn.u_mul_e('h', 'h', 'm'),
-                    self._lstm_reducer)
-            else:
-                graph.update_all(
-                    fn.copy_src('h', 'm'),
-                    self._lstm_reducer)
             h_neigh = graph.dstdata['neigh']
 
         else:

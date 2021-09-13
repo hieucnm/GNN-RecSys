@@ -148,7 +148,7 @@ def main():
                                     neg_etype=train_data.neg_label_edge_types
                                     )
 
-    print('Evaluate when no training were run :')
+    print('Evaluate before training:')
     print('--> Evaluating sub-train ...')
     train_auc_dict = evaluator.evaluate(
         graph=train_data.graph,
@@ -164,7 +164,7 @@ def main():
         ground_truth=valid_ground_truth
     )
 
-    report = "--> Metrics before training: \nTraining:   {} \nValidation: {}" \
+    report = "--> Before training: \nTraining:   {} \nValidation: {}" \
         .format(get_report(train_auc_dict, item2node),
                 get_report(val_auc_dict, item2node))
     print(report)

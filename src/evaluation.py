@@ -39,7 +39,7 @@ class BaseEvaluator:
         item_embed = torch.zeros(num_unique_items, self.embed_dim).to(self.device)
         for i, (_, output_nodes, blocks) in enumerate(item_node_loader):
             embed_dict = self._forward(blocks)
-            item_embed[output_nodes[self.item_id]] = embed_dict[self.item_id]
+            item_embed[output_nodes[self.item_id].long()] = embed_dict[self.item_id]
         return item_embed
 
     def _get_similarities(self,
