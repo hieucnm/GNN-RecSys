@@ -105,7 +105,7 @@ class EdgeLoaderPlus(EdgeDataLoader):
                                          pos_etypes=pos_label_etypes,
                                          neg_etypes=neg_label_etypes
                                          )
-        print('- EdgeDataLoader using {} and {}'.format(sampler.__class__, sampler_n.__class__))
+        print('- EdgeDataLoader using {} and {}'.format(sampler.__class__.__name__, sampler_n.__class__.__name__))
 
         edge_param = {
             'g': graph,
