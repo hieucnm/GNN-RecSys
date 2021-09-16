@@ -7,12 +7,12 @@ from src.utils_data import create_common_ids, read_data_rename_id, read_data
 
 
 class BaseDataSet:
-    def __init__(self, has_label=True, train_iid_map_df=None):
+    def __init__(self, has_label=True, train_iid_map_df=None, use_edge_features=False):
         self.new_id_suffix = 'idx'  # e.g: `src_id` will be map to `src_id_idx`
         self.user_id = 'src_id'
         self.item_id = 'ad_cate'
         self.user_ids = ['src_id', 'des_id']
-        self.feature_dict = None
+        self.node_feature_dict = None
         self.data_dict = None
         self.uid_map_df = None
         self.iid_map_df = None
@@ -20,6 +20,7 @@ class BaseDataSet:
         self.train_graph = None
         self.has_label = has_label
         self.train_iid_map_df = train_iid_map_df
+        self.use_edge_features = use_edge_features
 
     @property
     def _homo_data_names(self):
@@ -38,24 +39,16 @@ class BaseDataSet:
         })
         return triplets_dict
 
-    def _verify_has_label(self):
-        assert self.has_label, "Your dataset has no labels"
-
-    def _verify_graph_init(self):
-        assert self.graph is not None, "Your graph wasn't initialized"
-
     @property
     def label_edge_types(self):
         return self.pos_label_edge_types + self.neg_label_edge_types
 
     @property
     def pos_label_edge_types(self):
-        self._verify_has_label()
         return [('src_id', 'will-convert', 'ad_cate')]
 
     @property
     def neg_label_edge_types(self):
-        self._verify_has_label()
         return [('src_id', 'will-click', 'ad_cate')]
 
     @property
@@ -88,29 +81,45 @@ class BaseDataSet:
 
     @property
     def num_user_features(self):
-        return self.feature_dict[self.user_id].shape[1]
+        return self.node_feature_dict[self.user_id].shape[1]
+
+    @property
+    def num_edge_features_dict(self):
+        assert self.use_edge_features, "Cannot get `num_edge_features_dict` because `use_edge_features` is False"
+        return {
+            e_type: feats.shape[1]
+            for e_type, feats in self.train_graph.edata['features'].items()
+        }
 
     def init_graph_schema(self):
         graph_schema = dict()
         for data_name, df in self.data_dict.items():
             if data_name in self._homo_data_names:
-                edge_type = self._edge_triplets[data_name][0]
-                reverse_edge_type = self._edge_triplets[data_name][1]
+                e_type, reverse_e_type = self._edge_triplets[data_name]
                 src_node = f'src_id_{self.new_id_suffix}'
                 dst_node = f'des_id_{self.new_id_suffix}'
-                graph_schema[edge_type] = (df[src_node].values, df[dst_node].values)
-                graph_schema[reverse_edge_type] = (df[dst_node].values, df[src_node].values)
+                graph_schema[e_type] = (df[src_node].values, df[dst_node].values)
+                graph_schema[reverse_e_type] = (df[dst_node].values, df[src_node].values)
             else:
-                for edge_type in self._edge_triplets[data_name]:
-                    src_node, _, dst_node = edge_type
+                for e_type in self._edge_triplets[data_name]:
+                    src_node, _, dst_node = e_type
                     src_node = f'{src_node}_{self.new_id_suffix}'
                     dst_node = f'{dst_node}_{self.new_id_suffix}'
-                    graph_schema[edge_type] = (df[src_node].values, df[dst_node].values)
+                    graph_schema[e_type] = (df[src_node].values, df[dst_node].values)
         return graph_schema
 
     def _import_feature(self):
-        self.train_graph.nodes[self.user_id].data['features'] = self.feature_dict[self.user_id]
-        self.train_graph.nodes[self.item_id].data['features'] = self.feature_dict[self.item_id]
+        self.train_graph.nodes[self.user_id].data['features'] = self.node_feature_dict[self.user_id]
+        self.train_graph.nodes[self.item_id].data['features'] = self.node_feature_dict[self.item_id]
+
+        if self.use_edge_features:
+            id_columns = self.user_ids + [self.item_id]
+            id_columns += [f'{c}_{self.new_id_suffix}' for c in id_columns]
+            for data_name, df in self.data_dict.items():
+                edge_features = df[df.columns.difference(id_columns)].values
+                e_type, reverse_e_type = self._edge_triplets[data_name]
+                self.train_graph.edges[e_type].data['features'] = edge_features
+                self.train_graph.edges[reverse_e_type].data['features'] = edge_features
 
     def init_graph(self):
         graph_schema = self.init_graph_schema()
@@ -130,7 +139,6 @@ class BaseDataSet:
 
     @property
     def model_edge_types(self):
-        self._verify_graph_init()
         return self.train_graph.canonical_etypes
 
     def _use_train_iid_map(self, df_list):
@@ -210,7 +218,7 @@ class GroupChatBaseDataSet(BaseDataSet, ABC):
             df_label_0.shape[0], df_label_0[self.user_id].nunique(), df_label_0[self.item_id].nunique(),
             '', self.uid_map_df.shape[0], self.iid_map_df.shape[0],
             '', n_raw_users, n_raw_items,
-            '', self.feature_dict[self.user_id].shape[0], self.feature_dict[self.user_id].shape[1] - 1
+            '', self.node_feature_dict[self.user_id].shape[0], self.node_feature_dict[self.user_id].shape[1] - 1
         )
         print(summary)
 
@@ -262,7 +270,7 @@ class GroupChatBaseDataSet(BaseDataSet, ABC):
 
         item_feature = torch.tensor(list(range(iid_map_df.shape[0]))).int()
 
-        self.feature_dict = {
+        self.node_feature_dict = {
             self.user_id: user_feature,
             self.item_id: item_feature
         }
@@ -272,8 +280,10 @@ class GroupChatBaseDataSet(BaseDataSet, ABC):
 
 
 class TrainDataSet(GroupChatBaseDataSet):
-    def __init__(self, data_dirs, train_iid_map_df=None, rename_item_id=False):
-        super(TrainDataSet, self).__init__(has_label=True, train_iid_map_df=train_iid_map_df)
+    def __init__(self, data_dirs, train_iid_map_df=None, rename_item_id=False, use_edge_features=False):
+        super(TrainDataSet, self).__init__(has_label=True,
+                                           train_iid_map_df=train_iid_map_df,
+                                           use_edge_features=use_edge_features)
         self.data_dirs = [x.rstrip('/') for x in data_dirs.split(',')]
         self.rename_item_id = rename_item_id
 
@@ -298,8 +308,11 @@ class TrainDataSet(GroupChatBaseDataSet):
 
 
 class PredictDataSet(GroupChatBaseDataSet):
-    def __init__(self, train_iid_map_df, df_group, df_ad, user_feature, to_infer_uid_df=None):
-        super(PredictDataSet, self).__init__(has_label=False, train_iid_map_df=train_iid_map_df)
+    def __init__(self, train_iid_map_df, df_group, df_ad, user_feature, to_infer_uid_df=None, use_edge_features=False):
+        super(PredictDataSet, self).__init__(has_label=False,
+                                             train_iid_map_df=train_iid_map_df,
+                                             use_edge_features=use_edge_features
+                                             )
         self.user_feature = user_feature
         self.df_group = df_group
         self.df_ad = df_ad
