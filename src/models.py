@@ -1,221 +1,121 @@
 from typing import Tuple
 
-import dgl.function as fn
+import dgl.function as dglfn
 import dgl.nn.pytorch as dglnn
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 
-class NodeEmbedding(nn.Module):
-    """
-    Projects the node features into embedding space.
-    If use_id = True, the ids of nodes will be use to get embeddings.
-    Otherwise, the node features will be projected to the embedding space,
-        and a batch_norm layer also be used to normalize the features
-    """
+def udf_u_cat_e(edges):
+    return {'m': torch.cat([edges.src['h'], edges.data['h']], 1)}
 
-    def __init__(self,
-                 in_feats,
-                 out_feats,
-                 use_id
-                 ):
+
+class Normalize(nn.Module):
+    def forward(self, x):
+        x_norm = x.norm(2, 1, keepdim=True)
+        x_norm = torch.where(x_norm == 0, torch.tensor(1.).to(x_norm), x_norm)
+        return x / x_norm
+
+
+class LinearWithBatchNorm(nn.Module):
+    def __init__(self, in_feats, out_feats, bias=False):
         super().__init__()
-        self.use_id = use_id
-        if use_id:
-            self.embedding = nn.Embedding(in_feats, out_feats)
-        else:
-            self.bn = nn.BatchNorm1d(in_feats)
-            self.embedding = nn.Linear(in_feats, out_feats)
+        self.bn = nn.BatchNorm1d(in_feats)
+        self.ln = nn.Linear(in_feats, out_feats, bias=bias)
 
-    def forward(self, node_feats):
-        if not self.use_id:
-            node_feats = self.bn(node_feats)
-        x = self.embedding(node_feats)
-        return x
+    def forward(self, x):
+        return self.ln(self.bn(x))
 
 
 class ConvLayer(nn.Module):
     """
     1 layer of message passing & aggregation, specific to an edge type.
-
-    Similar to SAGEConv layer in DGL library.
-
-    Methods
-    -------
-    reset_parameters:
-        Intialize parameters for all neural networks in the layer.
-    _lstm_reducer:
-        Aggregate messages of neighborhood nodes using LSTM technique. (All other message aggregation are builtin
-        functions of DGL).
-    forward:
-        Actual message passing & aggregation, & update of nodes messages.
-
+    Similar to SAGEConv layer in DGL library, but advanced.
     """
-
-    def reset_parameters(self):
-        gain = nn.init.calculate_gain('relu')
-        nn.init.xavier_uniform_(self.fc_self.weight, gain=gain)
-        nn.init.xavier_uniform_(self.fc_neigh.weight, gain=gain)
-        # nn.init.xavier_uniform_(self.fc_edge.weight, gain=gain)
-        if self._aggre_type in ['max_nn', 'max_nn_edge', 'mean_nn', 'mean_nn_edge']:
-            nn.init.xavier_uniform_(self.fc_preagg.weight, gain=gain)
-        if self._aggre_type == 'lstm':
-            self.lstm.reset_parameters()
-
     def __init__(self,
                  in_feats: Tuple[int, int],
                  out_feats: int,
-                 dropout: float,
                  aggregator_type: str,
-                 norm,
+                 dropout: float,
+                 norm: bool = True,
+                 pre_aggregate: bool = False,
+                 use_edge_feat: bool = False,
+                 edge_agg_type: str = None,
+                 edge_feats: int = None,
                  ):
-        """
-        Initialize the layer with parameters.
-
-        Parameters
-        ----------
-        in_feats:
-            Dimension of the message (aka features) of the node type neighbor and of the node type. E.g. if the
-            ConvLayer is initialized for the edge type (user, clicks, item), in_feats should be
-            (dimension_of_item_features, dimension_of_user_features). Note that usually features will first go
-            through embedding layer, thus dimension might be equal to the embedding dimension.
-        out_feats:
-            Dimension that the output (aka the updated node message) should take. E.g. if the layer is a hidden layer,
-            out_feats should be hidden_dimension, whereas if the layer is the output layer, out_feats should be
-            output_dimension.
-        dropout:
-            Traditional dropout applied to input features.
-        aggregator_type:
-            This is the main parameter of ConvLayer; it defines how messages are passed and aggregated. Multiple
-            choices:
-                'mean' : messages are passed normally, and aggregated by doing the mean of all neighbor messages.
-                'mean_nn' : messages are passed through a neural network before being passed to neighbors, and
-                            aggregated by doing the mean of all neighbor messages.
-                'max_nn' : messages are passed through a neural network before being passed to neighbors, and
-                            aggregated by doing the max of all neighbor messages.
-                'lstm' : messages are passed normally, and aggregared using _lstm_reducer.
-            All choices have also their equivalent that ends with _edge (e.g. mean_nn_edge). Those version include
-            the edge in the message passing, i.e. the message will be multiplied by the value of the edge.
-        norm:
-            Apply normalization
-        """
         super().__init__()
-        self._in_neigh_feats, self._in_self_feats = in_feats
-        self._out_feats = out_feats
-        self._aggre_type = aggregator_type
+
+        assert aggregator_type in ['max', 'mean', 'sum'], 'Aggregator type {} not recognized.'.format(aggregator_type)
+        if use_edge_feat:
+            assert edge_agg_type in ['u_mul_e', 'u_add_e', 'u_cat_e'], 'Edge aggregator type {} not recognized.'.format(
+                edge_agg_type)
+
+        self.relu = nn.ReLU()
         self.dropout_fn = nn.Dropout(dropout)
-        self.norm = norm
-        self.fc_self = nn.Linear(self._in_self_feats, out_feats, bias=False)
-        self.fc_neigh = nn.Linear(self._in_neigh_feats, out_feats, bias=False)
-        # self.fc_edge = nn.Linear(1, 1, bias=True)  # Projecting recency days
-        if aggregator_type in ['max_nn', 'max_nn_edge', 'mean_nn', 'mean_nn_edge']:
-            self.fc_preagg = nn.Linear(self._in_neigh_feats, self._in_neigh_feats, bias=False)
-        if aggregator_type == 'lstm':
-            self.lstm = nn.LSTM(self._in_neigh_feats, self._in_neigh_feats, batch_first=True)
+        self.normalize = Normalize() if norm else nn.Identity()
+        self.pre_aggregate = pre_aggregate
+        self.use_edge_feat = use_edge_feat
+        self.edge_agg_type = edge_agg_type
+
+        self.agg_func = getattr(dglfn, aggregator_type)  # E.g: getattr(fn, 'mean') equals to fn.mean
+        self.msgs_func = self._get_msgs_func()
+
+        in_neigh_feats, in_self_feats = in_feats
+        self.fc_self = nn.Linear(in_self_feats, out_feats, bias=False)
+        self.fc_neigh = nn.Linear(in_neigh_feats, out_feats, bias=False)
+
+        # pre-aggregate
+        if pre_aggregate:
+            self.fc_preagg = nn.Linear(in_neigh_feats, in_neigh_feats, bias=False)
+
+        # edges
+        if use_edge_feat:
+            self.fc_edge = LinearWithBatchNorm(edge_feats, in_neigh_feats, bias=False)
+            if edge_agg_type == 'u_cat_e':
+                self.fc_remap = nn.Linear(in_neigh_feats * 2, in_neigh_feats, bias=False)
+
         self.reset_parameters()
+
+    def _get_msgs_func(self):
+        if self.use_edge_feat:
+            if self.edge_agg_type == 'u_cat_e':
+                return udf_u_cat_e
+            return getattr(dglfn, self.edge_agg_type)('h', 'h', 'm')
+        return dglfn.copy_src('h', 'm')
+
+    def reset_parameters(self):
+        torch.random.seed()
+        gain = nn.init.calculate_gain('relu')
+        nn.init.xavier_uniform_(self.fc_self.weight, gain=gain)
+        nn.init.xavier_uniform_(self.fc_neigh.weight, gain=gain)
+        if self.use_edge_feat:
+            nn.init.xavier_uniform_(self.fc_edge.ln.weight, gain=gain)
+            if self.edge_agg_type == 'u_cat_e':
+                nn.init.xavier_uniform_(self.fc_remap.weight, gain=gain)
+        if self.pre_aggregate:
+            nn.init.xavier_uniform_(self.fc_preagg.weight, gain=gain)
 
     def forward(self,
                 graph,
                 x):
-        """
-        Message passing & aggregation, & update of node messages.
-
-        Process is the following:
-            - Messages (h_neigh and h_self) are extracted from x
-            - Dropout is applied
-            - Messages are passed and aggregated using the _aggre_type specified (see __init__ for details), which
-              return updated h_neigh
-            - h_self passes through neural network & updated h_neigh passes through neural network, and are then summed
-              up
-            - The sum (z) passes through Relu
-            - Normalization is applied
-        """
         h_neigh, h_self = x
         h_neigh = self.dropout_fn(h_neigh)
         h_self = self.dropout_fn(h_self)
 
-        if self._aggre_type == 'mean':
-            graph.srcdata['h'] = h_neigh
-            graph.update_all(
-                fn.copy_src('h', 'm'),
-                fn.mean('m', 'neigh'))
-            h_neigh = graph.dstdata['neigh']
+        # message passing
+        graph.srcdata['h'] = self.relu(self.fc_preagg(h_neigh)) if self.pre_aggregate else h_neigh
+        if self.use_edge_feat:
+            graph.edata['h'] = self.fc_edge(graph.edata['features'])
+        graph.update_all(self.msgs_func, self.agg_func('m', 'neigh'))
+        h_neigh = graph.dstdata['neigh']
 
-        elif self._aggre_type == 'max':
-            graph.srcdata['h'] = h_neigh
-            graph.update_all(
-                fn.copy_src('h', 'm'),
-                fn.max('m', 'neigh'))
-            h_neigh = graph.dstdata['neigh']
+        # if yes, dimension of h_neigh was doubled due to concatenation
+        if self.use_edge_feat and self.edge_agg_type == 'u_cat_e':
+            h_neigh = self.fc_remap(h_neigh)
 
-        elif self._aggre_type == 'mean_nn':
-            graph.srcdata['h'] = F.relu(self.fc_preagg(h_neigh))
-            graph.update_all(
-                fn.copy_src('h', 'm'),
-                fn.mean('m', 'neigh'))
-            h_neigh = graph.dstdata['neigh']
-
-        elif self._aggre_type == 'max_nn':
-            graph.srcdata['h'] = F.relu(self.fc_preagg(h_neigh))
-            graph.update_all(
-                fn.copy_src('h', 'm'),
-                fn.max('m', 'neigh'))
-            h_neigh = graph.dstdata['neigh']
-
-        elif self._aggre_type == 'mean_edge':
-            graph.srcdata['h'] = h_neigh
-            if graph.canonical_etypes[0][0] in ['user', 'item'] and graph.canonical_etypes[0][2] in ['user', 'item']:
-                graph.edata['h'] = graph.edata['occurrence'].float().unsqueeze(1)
-                graph.update_all(
-                    fn.u_mul_e('h', 'h', 'm'),
-                    fn.mean('m', 'neigh'))
-            else:
-                graph.update_all(
-                    fn.copy_src('h', 'm'),
-                    fn.mean('m', 'neigh'))
-            h_neigh = graph.dstdata['neigh']
-
-        elif self._aggre_type == 'mean_nn_edge':
-            graph.srcdata['h'] = F.relu(self.fc_preagg(h_neigh))
-            if graph.canonical_etypes[0][0] in ['user', 'item'] and graph.canonical_etypes[0][2] in ['user', 'item']:
-                graph.edata['h'] = graph.edata['occurrence'].float().unsqueeze(1)
-                graph.update_all(
-                    fn.u_mul_e('h', 'h', 'm'),
-                    fn.mean('m', 'neigh'))
-            else:
-                graph.update_all(
-                    fn.copy_src('h', 'm'),
-                    fn.mean('m', 'neigh'))
-            h_neigh = graph.dstdata['neigh']
-
-        elif self._aggre_type == 'max_nn_edge':
-            graph.srcdata['h'] = F.relu(self.fc_preagg(h_neigh))
-            if graph.canonical_etypes[0][0] in ['user', 'item'] and graph.canonical_etypes[0][2] in ['user', 'item']:
-                graph.edata['h'] = graph.edata['occurrence'].float().unsqueeze(1)
-                graph.update_all(
-                    fn.u_mul_e('h', 'h', 'm'),
-                    fn.max('m', 'neigh'))
-            else:
-                graph.update_all(
-                    fn.copy_src('h', 'm'),
-                    fn.max('m', 'neigh'))
-            h_neigh = graph.dstdata['neigh']
-
-        else:
-            raise KeyError('Aggregator type {} not recognized.'.format(self._aggre_type))
-
-        z = self.fc_self(h_self) + self.fc_neigh(h_neigh)
-        z = F.relu(z)
-
-        # normalization
-        if self.norm:
-            z_norm = z.norm(2, 1, keepdim=True)
-            z_norm = torch.where(z_norm == 0,
-                                 torch.tensor(1.).to(z_norm),
-                                 z_norm)
-            z = z / z_norm
-
+        z = self.relu(self.fc_self(h_self) + self.fc_neigh(h_neigh))
+        z = self.normalize(z)
         return z
 
 
@@ -312,7 +212,7 @@ class CosinePrediction(nn.Module):
                 try:
                     graph.nodes[etype[0]].data['norm_h'] = F.normalize(h[etype[0]], p=2, dim=-1)
                     graph.nodes[etype[2]].data['norm_h'] = F.normalize(h[etype[2]], p=2, dim=-1)
-                    graph.apply_edges(fn.u_dot_v('norm_h', 'norm_h', 'cos'), etype=etype)
+                    graph.apply_edges(dglfn.u_dot_v('norm_h', 'norm_h', 'cos'), etype=etype)
                 except KeyError:
                     pass  # For etypes that are not in training eids, thus have no 'h'
             ratings = graph.edata['cos']
@@ -331,30 +231,38 @@ class ConvModel(nn.Module):
                  user_id: str,
                  item_id: str,
                  pred: str,
-                 aggregator_homo: str,
-                 aggregator_hetero: str,
                  n_layers: int,
+                 aggregator_hetero: str,
+                 aggregator_homo: str,
                  norm: bool = True,
                  dropout: float = 0.0,
+                 pre_aggregate: bool = False,
+                 use_edge_feat: bool = False,
+                 edge_agg_type: str = None,
+                 edge_feats_dict: dict = None,
                  ):
         """
         Initialize the ConvModel.
 
         Parameters
         ----------
-        graph:
-            Graph, only used to query graph metastructure (fetch node types and edge types).
+        edge_types:
+            List of edge types to create hetero layers
+        user_id, item_id:
+            Name of user node and item node in the graph to get the features correctly
         n_layers:
             Number of ConvLayer.
         dim_dict:
             Dictionary with dimension for all input nodes, hidden dimension (aka embedding dimension), output dimension.
-        norm, dropout, aggregator_homo:
-            See ConvLayer for details.
+        pred:
+            Type of prediction layer. Choices: ['cos', 'pred']
         aggregator_hetero:
             Since we are working with heterogeneous graph, all nodes will have messages coming from different types of
             nodes. However, the neighborhood messages are specific to a node type. Thus, we have to aggregate
             neighborhood messages from different edge types.
             Choices are 'mean', 'sum', 'max'.
+        Other Parameters:
+            See ConvLayer for details.
         """
         super().__init__()
         self.embed_dim = dim_dict['out']
@@ -362,36 +270,34 @@ class ConvModel(nn.Module):
         self.item_id = item_id
 
         # input layer
-        self.user_embed = NodeEmbedding(dim_dict['user'], dim_dict['hidden'], use_id=False)
-        self.item_embed = NodeEmbedding(dim_dict['item'], dim_dict['hidden'], use_id=True)
+        self.user_embed = LinearWithBatchNorm(dim_dict['user'], dim_dict['hidden'])
+        self.item_embed = nn.Embedding(dim_dict['item'], dim_dict['hidden'])
+
+        # hidden layers
+        common_conv_params = {
+            'in_feats': (dim_dict['hidden'], dim_dict['hidden']),
+            'aggregator_type': aggregator_homo,
+            'dropout': dropout,
+            'norm': norm,
+            'pre_aggregate': pre_aggregate,
+            'use_edge_feat': use_edge_feat,
+            'edge_agg_type': edge_agg_type,
+        }
+
+        if use_edge_feat:
+            assert edge_feats_dict, "`use_edge_feat` is True but `edge_feats_dict` not given"
 
         self.layers = nn.ModuleList()
-        # hidden layers
-        for i in range(n_layers - 2):
+        for i in range(n_layers - 1):
+            out_feats = dim_dict['out'] if i == n_layers - 2 else dim_dict['hidden']
             self.layers.append(dglnn.HeteroGraphConv({
-                e_type[1]:
-                    ConvLayer(
-                         in_feats=(dim_dict['hidden'], dim_dict['hidden']),
-                         out_feats=dim_dict['hidden'],
-                         dropout=dropout,
-                         aggregator_type=aggregator_homo,
-                         norm=norm)
+                e_type[1]: ConvLayer(
+                    edge_feats=edge_feats_dict[e_type] if use_edge_feat else None,
+                    out_feats=out_feats,
+                    **common_conv_params)
                 for e_type in edge_types},
                 aggregate=aggregator_hetero
             ))
-
-        # output layer
-        self.layers.append(dglnn.HeteroGraphConv({
-            e_type[1]:
-                ConvLayer(
-                    in_feats=(dim_dict['hidden'], dim_dict['hidden']),
-                    out_feats=dim_dict['out'],
-                    dropout=dropout,
-                    aggregator_type=aggregator_homo,
-                    norm=norm)
-            for e_type in edge_types},
-            aggregate=aggregator_hetero
-        ))
 
         if pred == 'cos':
             self.pred_fn = CosinePrediction()
@@ -423,7 +329,6 @@ class ConvModel(nn.Module):
         Full pass through the ConvModel.
 
         Process:
-            - Embedding layer
             - get_repr: As many ConvLayer as wished. All "Layers" are composed of as many ConvLayer as there
                         are edge types.
             - Predicting layer predicts score for all positive examples and all negative examples.
