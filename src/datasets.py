@@ -17,7 +17,7 @@ class BaseDataSet:
         self.uid_map_df = None
         self.iid_map_df = None
         self.graph = None
-        self.adjust_graph = None
+        self.train_graph = None
         self.has_label = has_label
         self.train_iid_map_df = train_iid_map_df
 
@@ -108,10 +108,9 @@ class BaseDataSet:
                     graph_schema[edge_type] = (df[src_node].values, df[dst_node].values)
         return graph_schema
 
-    def _import_feature(self, g):
-        g.nodes[self.user_id].data['features'] = self.feature_dict[self.user_id]
-        g.nodes[self.item_id].data['features'] = self.feature_dict[self.item_id]
-        return g
+    def _import_feature(self):
+        self.train_graph.nodes[self.user_id].data['features'] = self.feature_dict[self.user_id]
+        self.train_graph.nodes[self.item_id].data['features'] = self.feature_dict[self.item_id]
 
     def init_graph(self):
         graph_schema = self.init_graph_schema()
@@ -119,25 +118,20 @@ class BaseDataSet:
             self.user_id: self.uid_map_df.shape[0],
             self.item_id: self.iid_map_df.shape[0]
         }
-        graph = heterograph(graph_schema, num_nodes_dict=num_nodes_dict, idtype=torch.int32)
-        graph = self._import_feature(graph)
-        self.graph = graph
 
-    def init_adjust_graph(self):
-        adjust_graph = self.graph.clone()
-        for e_type in self.pos_label_edge_types:
-            adjust_graph.remove_edges(torch.arange(self.graph.number_of_edges(e_type), dtype=torch.int32), etype=e_type)
-        for e_type in self.neg_label_edge_types:
-            adjust_graph.remove_edges(torch.arange(self.graph.number_of_edges(e_type), dtype=torch.int32), etype=e_type)
-        self.adjust_graph = adjust_graph
+        label_graph_schema = {}
+        for k in self.label_edge_types:
+            label_graph_schema[k] = graph_schema[k]
+            graph_schema.pop(k)
+
+        self.graph = heterograph(label_graph_schema, num_nodes_dict=num_nodes_dict, idtype=torch.int32)
+        self.train_graph = heterograph(graph_schema, num_nodes_dict=num_nodes_dict, idtype=torch.int32)
+        self._import_feature()
 
     @property
     def model_edge_types(self):
         self._verify_graph_init()
-        label_edge_types = self.label_edge_types if self.has_label else []
-        return [
-            e_type for e_type in self.graph.canonical_etypes if e_type not in label_edge_types
-        ]
+        return self.train_graph.canonical_etypes
 
     def _use_train_iid_map(self, df_list):
         for df in df_list:
@@ -224,7 +218,7 @@ class GroupChatBaseDataSet(BaseDataSet, ABC):
 
         user_feature, df_ad, df_group, df_label = self._load_data()
 
-        if df_label is None:
+        if not self.has_label:
             # dummy data, will not be added to data_dict later
             df_label = pd.DataFrame(columns=[self.user_id, self.item_id, 'label'])
 
@@ -253,7 +247,7 @@ class GroupChatBaseDataSet(BaseDataSet, ABC):
             'ad_click': df_ad[df_ad['kind'] == 100].reset_index(drop=True),
             'ad_convert': df_ad[df_ad['kind'] == 201].reset_index(drop=True),
         }
-        if df_label.shape[0] != 0:
+        if self.has_label:
             data_dict['label_1'] = df_label[df_label['label'] == 1].reset_index(drop=True)
             data_dict['label_0'] = df_label[df_label['label'] == 0].reset_index(drop=True)
 

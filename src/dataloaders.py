@@ -93,7 +93,7 @@ def get_negative_sampler(name, sample_size, graph=None, pos_etypes=None, neg_ety
 
 
 class EdgeLoaderPlus(EdgeDataLoader):
-    def __init__(self, graph, adjust_graph, pos_label_etypes, neg_label_etypes=None, **params):
+    def __init__(self, graph, train_graph, pos_label_etypes, neg_label_etypes=None, **params):
         label_eid_dict = {
             e_type: torch.arange(graph.number_of_edges(e_type), dtype=torch.int32)
             for e_type in pos_label_etypes
@@ -110,7 +110,7 @@ class EdgeLoaderPlus(EdgeDataLoader):
         edge_param = {
             'g': graph,
             'eids': label_eid_dict,
-            'g_sampling': adjust_graph,
+            'g_sampling': train_graph,
             'block_sampler': sampler,
             'negative_sampler': sampler_n,
             'batch_size': params['edge_batch_size'],
@@ -153,12 +153,12 @@ def get_user_nodes_and_grountruth(graph, user_id, etypes=None, sample_size=None)
 
 
 class NodeLoaderPlus(NodeDataLoader):
-    def __init__(self, graph, adjust_graph, user_id, item_id, e_types, sample_size=None, **params):
+    def __init__(self, graph, train_graph, user_id, item_id, e_types, sample_size=None, **params):
         unique_user_nodes, groundtruth_dict = get_user_nodes_and_grountruth(graph, user_id, e_types, sample_size)
         unique_item_nodes = np.arange(graph.num_nodes(item_id))
         sampler = get_neighbor_sampler(n_layers=params['n_layers'] - 1, n_neighbors=params['n_neighbors'])
         node_param = {
-            'g': adjust_graph,
+            'g': train_graph,
             'nids': {user_id: unique_user_nodes, item_id: unique_item_nodes},
             'block_sampler': sampler,
             'batch_size': params['node_batch_size'],

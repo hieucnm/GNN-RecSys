@@ -45,9 +45,8 @@ def main():
     train_data = TrainDataSet(data_dirs=args.train_dirs, rename_item_id=args.rename_item)
     train_data.load_data()
     train_data.init_graph()
-    train_data.init_adjust_graph()
     train_edge_loader = EdgeLoaderPlus(graph=train_data.graph,
-                                       adjust_graph=train_data.adjust_graph,
+                                       train_graph=train_data.train_graph,
                                        pos_label_etypes=train_data.pos_label_edge_types,
                                        neg_label_etypes=train_data.neg_label_edge_types,
                                        sampler_n=args.neg_sampler,
@@ -60,7 +59,7 @@ def main():
                                        )
 
     train_node_loader = NodeLoaderPlus(graph=train_data.graph,
-                                       adjust_graph=train_data.adjust_graph,
+                                       train_graph=train_data.train_graph,
                                        user_id=train_data.user_id,
                                        item_id=train_data.item_id,
                                        e_types=train_data.label_edge_types,
@@ -76,9 +75,8 @@ def main():
     valid_data = TrainDataSet(data_dirs=args.valid_dirs, train_iid_map_df=train_data.iid_map_df)
     valid_data.load_data()
     valid_data.init_graph()
-    valid_data.init_adjust_graph()
     valid_edge_loader = EdgeLoaderPlus(graph=valid_data.graph,
-                                       adjust_graph=valid_data.adjust_graph,
+                                       train_graph=valid_data.train_graph,
                                        pos_label_etypes=valid_data.pos_label_edge_types,
                                        neg_label_etypes=valid_data.neg_label_edge_types,
                                        sampler_n=args.neg_sampler,
@@ -91,7 +89,7 @@ def main():
                                        )
 
     valid_node_loader = NodeLoaderPlus(graph=valid_data.graph,
-                                       adjust_graph=valid_data.adjust_graph,
+                                       train_graph=valid_data.train_graph,
                                        user_id=valid_data.user_id,
                                        item_id=valid_data.item_id,
                                        e_types=valid_data.label_edge_types,
@@ -102,7 +100,7 @@ def main():
                                        )
     valid_ground_truth = valid_node_loader.groundtruth_dict
 
-    item_node_loader = ItemNodeLoaderPlus(adjust_graph=train_data.adjust_graph,
+    item_node_loader = ItemNodeLoaderPlus(adjust_graph=train_data.train_graph,
                                           item_id=train_data.item_id,
                                           n_neighbors=args.n_neighbors,
                                           n_layers=args.n_layers,
@@ -210,7 +208,7 @@ def main():
             metrics[f'AUC {node2item[item_nid]}']['validation'].append(auc)
 
         # Save every epoch, not after all epochs
-        item_embed = evaluator.get_all_item_embeddings(train_data.adjust_graph, item_node_loader)
+        item_embed = evaluator.get_all_item_embeddings(train_data.train_graph, item_node_loader)
         save_everything(graph=train_data.graph,
                         model=model,
                         args=args,
