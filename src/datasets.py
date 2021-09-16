@@ -1,3 +1,5 @@
+from abc import ABC
+
 import pandas as pd
 import torch
 from dgl import heterograph
@@ -7,7 +9,6 @@ from src.utils_data import create_common_ids, read_data_rename_id, read_data
 class BaseDataSet:
     def __init__(self, has_label=True, train_iid_map_df=None):
         self.new_id_suffix = 'idx'  # e.g: `src_id` will be map to `src_id_idx`
-        self.homo_data_names = ['group_chat']  # these data contains user - user interactions
         self.user_id = 'src_id'
         self.item_id = 'ad_cate'
         self.user_ids = ['src_id', 'des_id']
@@ -21,9 +22,12 @@ class BaseDataSet:
         self.train_iid_map_df = train_iid_map_df
 
     @property
+    def _homo_data_names(self):
+        return []  # these data contains user - user interactions
+
+    @property
     def _edge_triplets(self):
         triplets_dict = {
-            'group_chat': [('src_id', 'group-chat-to', 'src_id'), ('src_id', 'group-chat-by', 'src_id')],
             'ad_click': [('src_id', 'clicked', 'ad_cate'), ('ad_cate', 'clicked-by', 'src_id')],
             'ad_convert': [('src_id', 'converted', 'ad_cate'), ('ad_cate', 'converted-by', 'src_id')],
         }
@@ -86,45 +90,10 @@ class BaseDataSet:
     def num_user_features(self):
         return self.feature_dict[self.user_id].shape[1]
 
-    def summary_data(self):
-        df_group = self.data_dict['group_chat']
-        df_click = self.data_dict['ad_click']
-        df_convert = self.data_dict['ad_convert']
-        if self.has_label:
-            df_label_1 = self.data_dict['label_1']
-            df_label_0 = self.data_dict['label_0']
-        else:
-            # dummy data, to report only
-            df_label_1 = pd.DataFrame(columns=[self.user_id, self.item_id])
-            df_label_0 = pd.DataFrame(columns=[self.user_id, self.item_id])
-
-        n_raw_items = self.iid_map_df[self.item_id].apply(lambda x: str(x).split('_')[0]).nunique()
-        n_raw_users = self.uid_map_df[self.user_id].apply(lambda x: str(x).split('_')[0]).nunique()
-
-        summary = "========================= Data Summary =========================\n" \
-                  "- group_chat: #rows = {:8d}\n" \
-                  "- ad_click  : #rows = {:8d} | #users = {:8d} | #items = {:3d}\n" \
-                  "- ad_convert: #rows = {:8d} | #users = {:8d} | #items = {:3d}\n" \
-                  "- label_1   : #rows = {:8d} | #users = {:8d} | #items = {:3d}\n" \
-                  "- label_0   : #rows = {:8d} | #users = {:8d} | #items = {:3d}\n" \
-                  "- Union     :         {:8s} | #users = {:8d} | #items = {:3d}\n" \
-                  "- Union raw :         {:8s} | #users = {:8d} | #items = {:3d}\n" \
-                  "- user_feats:         {:8s} | #users = {:8d} | #feats = {:3d}".format(
-            df_group.shape[0],
-            df_click.shape[0], df_click[self.user_id].nunique(), df_click[self.item_id].nunique(),
-            df_convert.shape[0], df_convert[self.user_id].nunique(), df_convert[self.item_id].nunique(),
-            df_label_1.shape[0], df_label_1[self.user_id].nunique(), df_label_1[self.item_id].nunique(),
-            df_label_0.shape[0], df_label_0[self.user_id].nunique(), df_label_0[self.item_id].nunique(),
-            '', self.uid_map_df.shape[0], self.iid_map_df.shape[0],
-            '', n_raw_users, n_raw_items,
-            '', self.feature_dict[self.user_id].shape[0], self.feature_dict[self.user_id].shape[1] - 1
-        )
-        print(summary)
-
     def init_graph_schema(self):
         graph_schema = dict()
         for data_name, df in self.data_dict.items():
-            if data_name in self.homo_data_names:
+            if data_name in self._homo_data_names:
                 edge_type = self._edge_triplets[data_name][0]
                 reverse_edge_type = self._edge_triplets[data_name][1]
                 src_node = f'src_id_{self.new_id_suffix}'
@@ -190,6 +159,68 @@ class BaseDataSet:
         assert len(diff_users) == 0, f"There are {len(diff_users)} having no features"
 
     def load_data(self, print_summary=True):
+        raise NotImplementedError
+
+    def summary_data(self):
+        raise NotImplementedError
+
+    def _load_data(self):
+        raise NotImplementedError
+
+
+# ===================================================
+# ===================================================
+
+class GroupChatBaseDataSet(BaseDataSet, ABC):
+
+    @property
+    def _homo_data_names(self):
+        return ['group_chat']
+
+    @property
+    def _edge_triplets(self):
+        triplets_dict = super()._edge_triplets
+        triplets_dict.update({
+            'group_chat': [('src_id', 'group-chat-to', 'src_id'), ('src_id', 'group-chat-by', 'src_id')]
+        })
+        return triplets_dict
+
+    def summary_data(self):
+        df_group = self.data_dict['group_chat']
+        df_click = self.data_dict['ad_click']
+        df_convert = self.data_dict['ad_convert']
+        if self.has_label:
+            df_label_1 = self.data_dict['label_1']
+            df_label_0 = self.data_dict['label_0']
+        else:
+            # dummy data, to report only
+            df_label_1 = pd.DataFrame(columns=[self.user_id, self.item_id])
+            df_label_0 = pd.DataFrame(columns=[self.user_id, self.item_id])
+
+        n_raw_items = self.iid_map_df[self.item_id].apply(lambda x: str(x).split('_')[0]).nunique()
+        n_raw_users = self.uid_map_df[self.user_id].apply(lambda x: str(x).split('_')[0]).nunique()
+
+        summary = "========================= Data Summary =========================\n" \
+                  "- group_chat: #rows = {:8d}\n" \
+                  "- ad_click  : #rows = {:8d} | #users = {:8d} | #items = {:3d}\n" \
+                  "- ad_convert: #rows = {:8d} | #users = {:8d} | #items = {:3d}\n" \
+                  "- label_1   : #rows = {:8d} | #users = {:8d} | #items = {:3d}\n" \
+                  "- label_0   : #rows = {:8d} | #users = {:8d} | #items = {:3d}\n" \
+                  "- Union     :         {:8s} | #users = {:8d} | #items = {:3d}\n" \
+                  "- Union raw :         {:8s} | #users = {:8d} | #items = {:3d}\n" \
+                  "- user_feats:         {:8s} | #users = {:8d} | #feats = {:3d}".format(
+            df_group.shape[0],
+            df_click.shape[0], df_click[self.user_id].nunique(), df_click[self.item_id].nunique(),
+            df_convert.shape[0], df_convert[self.user_id].nunique(), df_convert[self.item_id].nunique(),
+            df_label_1.shape[0], df_label_1[self.user_id].nunique(), df_label_1[self.item_id].nunique(),
+            df_label_0.shape[0], df_label_0[self.user_id].nunique(), df_label_0[self.item_id].nunique(),
+            '', self.uid_map_df.shape[0], self.iid_map_df.shape[0],
+            '', n_raw_users, n_raw_items,
+            '', self.feature_dict[self.user_id].shape[0], self.feature_dict[self.user_id].shape[1] - 1
+        )
+        print(summary)
+
+    def load_data(self, print_summary=True):
 
         user_feature, df_ad, df_group, df_label = self._load_data()
 
@@ -245,11 +276,8 @@ class BaseDataSet:
         if print_summary:
             self.summary_data()
 
-    def _load_data(self):
-        raise NotImplementedError
 
-
-class TrainDataSet(BaseDataSet):
+class TrainDataSet(GroupChatBaseDataSet):
     def __init__(self, data_dirs, train_iid_map_df=None, rename_item_id=False):
         super(TrainDataSet, self).__init__(has_label=True, train_iid_map_df=train_iid_map_df)
         self.data_dirs = [x.rstrip('/') for x in data_dirs.split(',')]
@@ -275,7 +303,7 @@ class TrainDataSet(BaseDataSet):
         return user_feature, df_ad, df_group, df_label
 
 
-class PredictDataSet(BaseDataSet):
+class PredictDataSet(GroupChatBaseDataSet):
     def __init__(self, train_iid_map_df, df_group, df_ad, user_feature, to_infer_uid_df=None):
         super(PredictDataSet, self).__init__(has_label=False, train_iid_map_df=train_iid_map_df)
         self.user_feature = user_feature
