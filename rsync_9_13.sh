@@ -1,6 +1,6 @@
 #!/bin/zsh
 
-DES_PATH="/data/zmining/jupyter-notebook/hieucnm/graph/v4__with_user_group/scripts/GNN-ResSys"
+DES_PATH="/data/zmining/jupyter-notebook/hieucnm/graph/v5__with_edge_features/scripts/GNN-ResSys"
 MACHINE=zdeploy@10.50.9.13
 
 echo "---> rsync  ..."

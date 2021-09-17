@@ -42,7 +42,9 @@ def main():
     print(f'All arguments: {args}')
 
     print("Loading training data ...")
-    train_data = TrainDataSet(data_dirs=args.train_dirs, rename_item_id=args.rename_item)
+    train_data = TrainDataSet(data_dirs=args.train_dirs,
+                              rename_item_id=args.rename_item,
+                              use_edge_features=args.use_edge_feature)
     train_data.load_data()
     train_data.init_graph()
     train_edge_loader = EdgeLoaderPlus(graph=train_data.graph,
@@ -72,7 +74,9 @@ def main():
     train_ground_truth = train_node_loader.groundtruth_dict
 
     print("Loading validation data ...")
-    valid_data = TrainDataSet(data_dirs=args.valid_dirs, train_iid_map_df=train_data.iid_map_df)
+    valid_data = TrainDataSet(data_dirs=args.valid_dirs,
+                              train_iid_map_df=train_data.iid_map_df,
+                              use_edge_features=args.use_edge_feature)
     valid_data.load_data()
     valid_data.init_graph()
     valid_edge_loader = EdgeLoaderPlus(graph=valid_data.graph,
@@ -125,7 +129,11 @@ def main():
                       aggregator_homo=args.aggregator_homo,
                       aggregator_hetero=args.aggregator_hetero,
                       user_id=train_data.user_id,
-                      item_id=train_data.item_id
+                      item_id=train_data.item_id,
+                      pre_aggregate=args.pre_aggregate,
+                      use_edge_feat=args.use_edge_feature,
+                      edge_agg_type=args.aggregator_edge,
+                      edge_feats_dict=train_data.num_edge_features_dict,
                       )
     if device.type != 'cpu':
         model = model.to(device)
@@ -233,7 +241,7 @@ parser.add_argument('--rename-item', action='store_true', default=False,
                          'Still meet error, dont enable.')
 
 # Model
-parser.add_argument('--n-layers', type=int, default=4, help='Number of layers, including embedding layer.')
+parser.add_argument('--n-layers', type=int, default=3, help='Number of layers, including embedding layer.')
 parser.add_argument('--dropout', type=float, default=0.1, help='Dropout ratio')
 parser.add_argument('--pred', type=str, default='cos', choices=['sigmoid', 'cos'], help='Prediction method')
 parser.add_argument('--out-dim', type=int, default=128, help='Output dimension')
@@ -264,6 +272,12 @@ parser.add_argument('--n-neighbors', type=int, default=256,
                          'Set 0 to use all neighbors, but not recommended because the memory will explode. '
                          'For now we use the same number for all layers and all edge types. '
                          'Later, we will set different numbers by passing a list[dict[e_type, int]].')
+
+parser.add_argument('--pre-aggregate', action='store_true', default=False, help='Pre-aggreate')
+parser.add_argument('--use-edge-feature', action='store_true', default=True, help='Use edge features')
+parser.add_argument('--aggregator-edge', type=str, default='u_cat_e', choices=['u_mul_e', 'u_add_e', 'u_cat_e'],
+                    help='Function to aggregate messages from edge if `use-edge-feature` is True')
+
 
 # TODO: Best params for now
 #   loss: hinge

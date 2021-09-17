@@ -18,8 +18,9 @@ class BaseDataSet:
         self.item_id = 'ad_cate'
         self.user_ids = ['src_id', 'des_id']
         self.ad_commands = {
-            'click': 100,
-            'convert': 201
+            'click': 'click',  # 100,
+            'convert': 'conv',  # 201
+            'impress': 'impression'
         }
 
         # to be created when `load_data` called
@@ -41,6 +42,7 @@ class BaseDataSet:
         triplets_dict = {
             'ad_click': [('src_id', 'clicked', 'ad_cate'), ('ad_cate', 'clicked-by', 'src_id')],
             'ad_convert': [('src_id', 'converted', 'ad_cate'), ('ad_cate', 'converted-by', 'src_id')],
+            'ad_impress': [('src_id', 'impressed', 'ad_cate'), ('ad_cate', 'impressed-by', 'src_id')],
         }
         if self.has_label:
             triplets_dict.update({
@@ -118,17 +120,24 @@ class BaseDataSet:
                     graph_schema[e_type] = (df[src_node].values, df[dst_node].values)
         return graph_schema
 
+    @property
+    def _non_feature_columns(self):
+        non_feature_columns = self.user_ids + [self.item_id]
+        non_feature_columns += [f'{c}_{self.new_id_suffix}' for c in non_feature_columns]
+        non_feature_columns += ['kind', 'group_id']
+        return non_feature_columns
+
     def _import_feature(self):
         self.train_graph.nodes[self.user_id].data['features'] = self.node_feature_dict[self.user_id]
         self.train_graph.nodes[self.item_id].data['features'] = self.node_feature_dict[self.item_id]
 
         if self.use_edge_features:
-            non_feature_columns = self.user_ids + [self.item_id]
-            non_feature_columns += [f'{c}_{self.new_id_suffix}' for c in non_feature_columns]
-            non_feature_columns += ['kind', 'group_id']
+            non_feature_columns = self._non_feature_columns
             for data_name, df in self.data_dict.items():
+                if self.has_label and data_name in ['label_0', 'label_1']:
+                    continue
                 feature_columns = df.columns.difference(non_feature_columns)
-                edge_features = df[feature_columns].values
+                edge_features = torch.tensor(df[feature_columns].values).float()
                 e_type, reverse_e_type = self._edge_triplets[data_name]
                 self.train_graph.edges[e_type].data['features'] = edge_features
                 self.train_graph.edges[reverse_e_type].data['features'] = edge_features
@@ -203,6 +212,8 @@ class GroupChatBaseDataSet(BaseDataSet, ABC):
         df_group = self.data_dict['group_chat']
         df_click = self.data_dict['ad_click']
         df_convert = self.data_dict['ad_convert']
+        df_impress = self.data_dict['ad_impress']
+
         if self.has_label:
             df_label_1 = self.data_dict['label_1']
             df_label_0 = self.data_dict['label_0']
@@ -214,8 +225,14 @@ class GroupChatBaseDataSet(BaseDataSet, ABC):
         n_raw_items = self.iid_map_df[self.item_id].apply(lambda x: str(x).split('_')[0]).nunique()
         n_raw_users = self.uid_map_df[self.user_id].apply(lambda x: str(x).split('_')[0]).nunique()
 
+        non_feat_cols = self._non_feature_columns
+        n_ad_feats = len(df_click.columns.difference(non_feat_cols))
+        n_group_feats = len(df_group.columns.difference(non_feat_cols))
+        n_group_users = len(set(df_group['src_id']).union(df_group['des_id']))
+
         summary = "========================= Data Summary =========================\n" \
-                  "- group_chat: #rows = {:8d}\n" \
+                  "- group_chat: #rows = {:8d} | #users = {:8d} |          {:3s} | #feats = {:3d}\n" \
+                  "- ad_impress: #rows = {:8d} | #users = {:8d} | #items = {:3d} | #feats = {:3d}\n" \
                   "- ad_click  : #rows = {:8d} | #users = {:8d} | #items = {:3d}\n" \
                   "- ad_convert: #rows = {:8d} | #users = {:8d} | #items = {:3d}\n" \
                   "- label_1   : #rows = {:8d} | #users = {:8d} | #items = {:3d}\n" \
@@ -223,7 +240,8 @@ class GroupChatBaseDataSet(BaseDataSet, ABC):
                   "- Union     :         {:8s} | #users = {:8d} | #items = {:3d}\n" \
                   "- Union raw :         {:8s} | #users = {:8d} | #items = {:3d}\n" \
                   "- user_feats:         {:8s} | #users = {:8d} | #feats = {:3d}".format(
-            df_group.shape[0],
+            df_group.shape[0], n_group_users, '', n_group_feats,
+            df_impress.shape[0], df_impress[self.user_id].nunique(), df_impress[self.item_id].nunique(), n_ad_feats,
             df_click.shape[0], df_click[self.user_id].nunique(), df_click[self.item_id].nunique(),
             df_convert.shape[0], df_convert[self.user_id].nunique(), df_convert[self.item_id].nunique(),
             df_label_1.shape[0], df_label_1[self.user_id].nunique(), df_label_1[self.item_id].nunique(),
@@ -232,6 +250,7 @@ class GroupChatBaseDataSet(BaseDataSet, ABC):
             '', n_raw_users, n_raw_items,
             '', self.node_feature_dict[self.user_id].shape[0], self.node_feature_dict[self.user_id].shape[1] - 1
         )
+
         print(summary)
 
     def load_data(self, print_summary=True):
@@ -266,6 +285,7 @@ class GroupChatBaseDataSet(BaseDataSet, ABC):
             'group_chat': df_group,
             'ad_click': df_ad[df_ad['kind'] == self.ad_commands['click']].reset_index(drop=True),
             'ad_convert': df_ad[df_ad['kind'] == self.ad_commands['convert']].reset_index(drop=True),
+            'ad_impress': df_ad[df_ad['kind'] == self.ad_commands['impress']].reset_index(drop=True),
         }
         if self.has_label:
             data_dict['label_1'] = df_label[df_label['label'] == 1].reset_index(drop=True)
