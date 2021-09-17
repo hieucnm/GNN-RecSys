@@ -8,19 +8,29 @@ from src.utils_data import create_common_ids, read_data_rename_id, read_data
 
 class BaseDataSet:
     def __init__(self, has_label=True, train_iid_map_df=None, use_edge_features=False):
+        self.has_label = has_label
+        self.train_iid_map_df = train_iid_map_df
+        self.use_edge_features = use_edge_features
+
+        # basic attributes for this dataset
         self.new_id_suffix = 'idx'  # e.g: `src_id` will be map to `src_id_idx`
         self.user_id = 'src_id'
         self.item_id = 'ad_cate'
         self.user_ids = ['src_id', 'des_id']
+        self.ad_commands = {
+            'click': 100,
+            'convert': 201
+        }
+
+        # to be created when `load_data` called
         self.node_feature_dict = None
         self.data_dict = None
         self.uid_map_df = None
         self.iid_map_df = None
+
+        # to be created when 'init_graph' called
         self.graph = None
         self.train_graph = None
-        self.has_label = has_label
-        self.train_iid_map_df = train_iid_map_df
-        self.use_edge_features = use_edge_features
 
     @property
     def _homo_data_names(self):
@@ -113,10 +123,12 @@ class BaseDataSet:
         self.train_graph.nodes[self.item_id].data['features'] = self.node_feature_dict[self.item_id]
 
         if self.use_edge_features:
-            id_columns = self.user_ids + [self.item_id]
-            id_columns += [f'{c}_{self.new_id_suffix}' for c in id_columns]
+            non_feature_columns = self.user_ids + [self.item_id]
+            non_feature_columns += [f'{c}_{self.new_id_suffix}' for c in non_feature_columns]
+            non_feature_columns += ['kind', 'group_id']
             for data_name, df in self.data_dict.items():
-                edge_features = df[df.columns.difference(id_columns)].values
+                feature_columns = df.columns.difference(non_feature_columns)
+                edge_features = df[feature_columns].values
                 e_type, reverse_e_type = self._edge_triplets[data_name]
                 self.train_graph.edges[e_type].data['features'] = edge_features
                 self.train_graph.edges[reverse_e_type].data['features'] = edge_features
@@ -252,8 +264,8 @@ class GroupChatBaseDataSet(BaseDataSet, ABC):
 
         data_dict = {
             'group_chat': df_group,
-            'ad_click': df_ad[df_ad['kind'] == 100].reset_index(drop=True),
-            'ad_convert': df_ad[df_ad['kind'] == 201].reset_index(drop=True),
+            'ad_click': df_ad[df_ad['kind'] == self.ad_commands['click']].reset_index(drop=True),
+            'ad_convert': df_ad[df_ad['kind'] == self.ad_commands['convert']].reset_index(drop=True),
         }
         if self.has_label:
             data_dict['label_1'] = df_label[df_label['label'] == 1].reset_index(drop=True)
