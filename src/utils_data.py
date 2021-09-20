@@ -221,6 +221,7 @@ def save_everything(graph, model, args, metrics, dim_dict, train_data, item_embe
     with open(f'{save_dir}/schemas.json', 'w') as f:
         json.dump({'graph_schema': graph.canonical_etypes,
                    'model_schema': train_data.model_edge_types,
+                   'num_edge_features_dict': None if args.use_edge_feature else train_data.num_edge_features_dict,
                    'user_id': 'src_id',
                    'item_id': 'ad_cate'
                    }, f)

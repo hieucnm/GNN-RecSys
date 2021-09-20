@@ -51,7 +51,11 @@ def main():
                       aggregator_homo=params['aggregator_homo'],
                       aggregator_hetero=params['aggregator_hetero'],
                       user_id=schemas['user_id'],
-                      item_id=schemas['item_id']
+                      item_id=schemas['item_id'],
+                      pre_aggregate=params['pre_aggregate'],
+                      use_edge_feat=params['use_edge_feature'],
+                      edge_agg_type=params['aggregator_edge'],
+                      edge_feats_dict=params['num_edge_features_dict'],
                       )
     model.load_state_dict(torch.load(f'{train_output_dir}/{args.model_file}'))
     if device.type != 'cpu':
