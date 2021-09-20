@@ -107,11 +107,12 @@ class BaseDataSet:
         graph_schema = dict()
         for data_name, df in self.data_dict.items():
             if data_name in self._homo_data_names:
-                e_type, reverse_e_type = self._edge_triplets[data_name]
+                # e_type, reverse_e_type = self._edge_triplets[data_name]
+                e_type = self._edge_triplets[data_name][0]
                 src_node = f'src_id_{self.new_id_suffix}'
                 dst_node = f'des_id_{self.new_id_suffix}'
                 graph_schema[e_type] = (df[src_node].values, df[dst_node].values)
-                graph_schema[reverse_e_type] = (df[dst_node].values, df[src_node].values)
+                # graph_schema[reverse_e_type] = (df[dst_node].values, df[src_node].values)
             else:
                 for e_type in self._edge_triplets[data_name]:
                     src_node, _, dst_node = e_type
@@ -138,9 +139,13 @@ class BaseDataSet:
                     continue
                 feature_columns = df.columns.difference(non_feature_columns)
                 edge_features = torch.tensor(df[feature_columns].values).float()
-                e_type, reverse_e_type = self._edge_triplets[data_name]
-                self.train_graph.edges[e_type].data['features'] = edge_features
-                self.train_graph.edges[reverse_e_type].data['features'] = edge_features
+                if data_name in self._homo_data_names:
+                    e_type = self._edge_triplets[data_name][0]
+                    self.train_graph.edges[e_type].data['features'] = edge_features
+                else:
+                    e_type, reverse_e_type = self._edge_triplets[data_name]
+                    self.train_graph.edges[e_type].data['features'] = edge_features
+                    self.train_graph.edges[reverse_e_type].data['features'] = edge_features
 
     def init_graph(self):
         graph_schema = self.init_graph_schema()
@@ -204,7 +209,8 @@ class GroupChatBaseDataSet(BaseDataSet, ABC):
     def _edge_triplets(self):
         triplets_dict = super()._edge_triplets
         triplets_dict.update({
-            'group_chat': [('src_id', 'group-chat-to', 'src_id'), ('src_id', 'group-chat-by', 'src_id')]
+            # 'group_chat': [('src_id', 'group-chat-to', 'src_id'), ('src_id', 'group-chat-by', 'src_id')]
+            'group_chat': [('src_id', 'group-chat-to', 'src_id')]
         })
         return triplets_dict
 
