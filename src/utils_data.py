@@ -1,6 +1,7 @@
 import json
 import os
 import os.path as osp
+import pickle
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -66,6 +67,8 @@ def read_data(file_path):
         obj = pd.read_parquet(file_path)
     elif file_path.endswith('json'):
         obj = json.load(open(file_path))
+    elif file_path.endswith('pkl'):
+        obj = pickle.load(open(file_path, 'rb'))
     else:
         raise KeyError('File extension of {} not recognized.'.format(file_path))
     return obj
@@ -218,13 +221,13 @@ def save_everything(graph, model, args, metrics, dim_dict, train_data, item_embe
     with open(f'{save_dir}/model_structure.txt', 'w') as f:
         f.write(str(model.eval()))
 
-    with open(f'{save_dir}/schemas.json', 'w') as f:
-        json.dump({'graph_schema': graph.canonical_etypes,
-                   'model_schema': train_data.model_edge_types,
-                   'num_edge_features_dict': train_data.num_edge_features_dict if args.use_edge_feature else None,
-                   'user_id': 'src_id',
-                   'item_id': 'ad_cate'
-                   }, f)
+    with open(f'{save_dir}/schemas.pkl', 'wb') as f:
+        pickle.dump({'graph_schema': graph.canonical_etypes,
+                     'model_schema': train_data.model_edge_types,
+                     'num_edge_features_dict': train_data.num_edge_features_dict if args.use_edge_feature else None,
+                     'user_id': 'src_id',
+                     'item_id': 'ad_cate'
+                     }, f)
 
     if isinstance(item_embed, torch.Tensor):
         item_embed = item_embed.detach().cpu().numpy()

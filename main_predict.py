@@ -36,7 +36,7 @@ def main():
     print("Loading metadata  ...")
     train_output_dir = args.train_output_dir.rstrip('/')
     params = read_data(f'{train_output_dir}/metadata/arguments.json')
-    schemas = read_data(f'{train_output_dir}/metadata/schemas.json')
+    schemas = read_data(f'{train_output_dir}/metadata/schemas.pkl')
     train_iid_map_df = read_data(f'{train_output_dir}/metadata/train_iid_map_df.csv')
     item_emb = torch.from_numpy(np.load(f'{train_output_dir}/metadata/item_embeddings.npy'))
     print("--> Using trained item embeddings, shape =", item_emb.shape)
