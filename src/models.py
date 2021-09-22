@@ -8,6 +8,7 @@ import torch.nn.functional as F
 
 
 def udf_u_cat_e(edges):
+    # TODO: what if we add a normalize step after concat ??
     return {'m': torch.cat([edges.src['h'], edges.data['h']], 1)}
 
 
@@ -20,12 +21,35 @@ class Normalize(nn.Module):
 
 class LinearWithBatchNorm(nn.Module):
     def __init__(self, in_feats, out_feats, bias=False):
-        super().__init__()
+        super(LinearWithBatchNorm, self).__init__()
         self.bn = nn.BatchNorm1d(in_feats)
         self.ln = nn.Linear(in_feats, out_feats, bias=bias)
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        torch.random.seed()
+        gain = nn.init.calculate_gain('relu')
+        nn.init.xavier_uniform_(self.ln.weight, gain=gain)
 
     def forward(self, x):
         return self.ln(self.bn(x))
+
+
+class LinearWithNormalize(nn.Module):
+    def __init__(self, in_feats, out_feats, bias=False):
+        super(LinearWithNormalize, self).__init__()
+        self.ln = nn.Linear(in_feats, out_feats, bias=bias)
+        self.norm = Normalize()
+        self.relu = nn.ReLU()
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        torch.random.seed()
+        gain = nn.init.calculate_gain('relu')
+        nn.init.xavier_uniform_(self.ln.weight, gain=gain)
+
+    def forward(self, x):
+        return self.norm(self.relu(self.ln(x)))
 
 
 class ConvLayer(nn.Module):
@@ -71,7 +95,8 @@ class ConvLayer(nn.Module):
 
         # edges
         if use_edge_feat:
-            self.fc_edge = LinearWithBatchNorm(edge_feats, in_neigh_feats, bias=False)
+            # self.fc_edge = LinearWithBatchNorm(edge_feats, in_neigh_feats, bias=False)
+            self.fc_edge = LinearWithNormalize(edge_feats, in_neigh_feats, bias=False)
             if edge_agg_type == 'u_cat_e':
                 self.fc_remap = nn.Linear(in_neigh_feats * 2, in_neigh_feats, bias=False)
 
@@ -112,7 +137,7 @@ class ConvLayer(nn.Module):
 
         # if yes, dimension of h_neigh was doubled due to concatenation
         if self.use_edge_feat and self.edge_agg_type == 'u_cat_e':
-            h_neigh = self.fc_remap(h_neigh)
+            h_neigh = self.relu(self.fc_remap(h_neigh))
 
         z = self.relu(self.fc_self(h_self) + self.fc_neigh(h_neigh))
         z = self.normalize(z)
