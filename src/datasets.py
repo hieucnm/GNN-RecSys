@@ -153,8 +153,6 @@ class BaseDataSet:
             self.user_id: self.uid_map_df.shape[0],
             self.item_id: self.iid_map_df.shape[0]
         }
-        self.train_graph = heterograph(graph_schema, num_nodes_dict=num_nodes_dict, idtype=torch.int32)
-        self._import_feature()
 
         if self.has_label:
             label_graph_schema = {}
@@ -162,6 +160,8 @@ class BaseDataSet:
                 label_graph_schema[k] = graph_schema[k]
                 graph_schema.pop(k)
             self.graph = heterograph(label_graph_schema, num_nodes_dict=num_nodes_dict, idtype=torch.int32)
+        self.train_graph = heterograph(graph_schema, num_nodes_dict=num_nodes_dict, idtype=torch.int32)
+        self._import_feature()
 
     @property
     def model_edge_types(self):
