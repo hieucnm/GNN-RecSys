@@ -210,7 +210,7 @@ def get_mean_item_embed(iid_map_df: pd.DataFrame, item_embed: np.ndarray, item_i
 
 
 # noinspection SpellCheckingInspection
-def save_everything(graph, model, args, metrics, dim_dict, train_data, item_embed, save_dir):
+def save_everything(model, args, metrics, dim_dict, train_data, item_embed, save_dir):
 
     epoch = len([f for f in os.listdir(save_dir) if f.startswith('model_ep_')])
     torch.save(model.state_dict(), f'{save_dir}/model_ep_{epoch}.pth')
@@ -222,11 +222,11 @@ def save_everything(graph, model, args, metrics, dim_dict, train_data, item_embe
         f.write(str(model.eval()))
 
     with open(f'{save_dir}/schemas.pkl', 'wb') as f:
-        pickle.dump({'graph_schema': graph.canonical_etypes,
+        pickle.dump({'label_graph_schema': train_data.graph.canonical_etypes,
                      'model_schema': train_data.model_edge_types,
                      'num_edge_features_dict': train_data.num_edge_features_dict if args.use_edge_feature else None,
-                     'user_id': 'src_id',
-                     'item_id': 'ad_cate'
+                     'user_id': train_data.user_id,
+                     'item_id': train_data.item_id
                      }, f)
 
     if isinstance(item_embed, torch.Tensor):
