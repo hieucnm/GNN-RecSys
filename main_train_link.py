@@ -198,8 +198,7 @@ def main():
 
         # Save every epoch, not after all epochs
         item_embeds = evaluator.get_all_item_embeddings(train_data.train_graph, item_node_loader)
-        save_everything(graph=train_data.graph,
-                        model=model,
+        save_everything(model=model,
                         args=args,
                         metrics=metrics,
                         dim_dict=dim_dict,
