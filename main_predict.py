@@ -116,7 +116,7 @@ parser.add_argument('--has-label', action='store_true', default=False,
 parser.add_argument('--print-every', type=int, default=10, help='Print loss every these iterations')
 parser.add_argument('--node-batch-size', type=int, default=1024 * 2, help='Number of nodes in a batch')
 parser.add_argument('--num-workers', type=int, default=8, help='Number of cores of CPU to use')
-parser.add_argument('--n-neighbors', type=int, default=512,
+parser.add_argument('--n-neighbors', type=int, default=256,
                     help='Number of random neighbors to aggregate. '
                          'Set 0 to use all neighbors, but not recommended because the memory will explode. '
                          'For now we use the same number for all layers and all edge types. '
