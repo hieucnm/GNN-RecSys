@@ -55,7 +55,7 @@ def main():
                       pre_aggregate=params['pre_aggregate'],
                       use_edge_feat=params['use_edge_feature'],
                       edge_agg_type=params['aggregator_edge'],
-                      edge_feats_dict=params['num_edge_features_dict'],
+                      edge_feats_dict=schemas['num_edge_features_dict'],
                       )
     model.load_state_dict(torch.load(f'{train_output_dir}/{args.model_file}'))
     if device.type != 'cpu':
@@ -79,11 +79,12 @@ def main():
                               user_feature=read_data(data_dir + '/user_features.parquet'),
                               df_group=read_data(data_dir + '/group_chat.parquet'),
                               df_ad=read_data(data_dir + '/ad.parquet'),
-                              to_infer_uid_df=to_infer_uid_df
+                              to_infer_uid_df=to_infer_uid_df,
+                              use_edge_features=params['use_edge_feature']
                               )
         data.load_data()
         data.init_graph()
-        node_loader = UserNodeLoaderPlus(graph=data.graph,
+        node_loader = UserNodeLoaderPlus(graph=data.train_graph,
                                          to_infer_user_nid=data.to_infer_user_node_id,
                                          user_id=data.user_id,
                                          n_neighbors=args.n_neighbors,
