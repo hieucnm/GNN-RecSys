@@ -25,9 +25,7 @@ class LinearWithBatchNorm(nn.Module):
         self.ln = nn.Linear(in_feats, out_feats, bias=bias)
 
     def forward(self, x):
-        if x.shape[0] > 1:
-            x = self.bn(x)
-        return self.ln(x)
+        return self.ln(self.bn(x))
 
 
 class ConvLayer(nn.Module):

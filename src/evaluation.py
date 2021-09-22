@@ -87,6 +87,7 @@ class LinkBasedEvaluator(BaseEvaluator):
         num_gt_in_rec = 0
         rec_item_set = set()
 
+        self.model.eval()
         for i, (_, output_nodes, blocks) in enumerate(node_loader):
             if (i + 1) % self.print_every == 0:
                 print("Batch {}/{}".format(i + 1, len(node_loader)))
@@ -148,6 +149,7 @@ class LabelBasedEvaluator(BaseEvaluator):
         score_dict = defaultdict(list)
         label_dict = defaultdict(list)
 
+        self.model.eval()
         for i, (_, output_nodes, blocks) in enumerate(node_loader):
             if (i + 1) % self.print_every == 0:
                 print("Batch {}/{}".format(i + 1, len(node_loader)))
@@ -250,6 +252,7 @@ class Predictor(BaseEvaluator):
 
         user_emb_df_list = []
         score_df_list = []
+        self.model.eval()
 
         for i, (_, output_nodes, blocks) in enumerate(node_loader):
 
