@@ -254,7 +254,7 @@ class GroupChatBaseDataSet(BaseDataSet, ABC):
             df_label_0.shape[0], df_label_0[self.user_id].nunique(), df_label_0[self.item_id].nunique(),
             '', self.uid_map_df.shape[0], self.iid_map_df.shape[0],
             '', n_raw_users, n_raw_items,
-            '', self.node_feature_dict[self.user_id].shape[0], self.node_feature_dict[self.user_id].shape[1] - 1
+            '', self.node_feature_dict[self.user_id].shape[0], self.node_feature_dict[self.user_id].shape[1]
         )
 
         print(summary)
