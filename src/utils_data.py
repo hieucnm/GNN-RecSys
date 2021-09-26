@@ -253,7 +253,7 @@ def save_everything(model, args, metrics, dim_dict, train_data, item_embed, save
 def save_item_embed_df(item_emb, node2iid, item_id, save_path):
     embed_df = pd.DataFrame()
     embed_df[item_id] = [node2iid[nid] for nid in range(item_emb.shape[0])]
-    embed_df['embeddings'] = item_emb.tolist()
+    embed_df['embeddings'] = list(np.asarray(item_emb).astype(np.float32))
     embed_df.to_parquet(save_path)
 
 
