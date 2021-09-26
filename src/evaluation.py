@@ -223,6 +223,7 @@ class Predictor(BaseEvaluator):
                          ):
         score_df = pd.DataFrame(data=scores, columns=self.iid_columns)
         score_df[self.user_id] = [node2uid[nid] for nid in output_nodes[self.user_id].tolist()]
+        score_df[self.user_id] = score_df[self.user_id].astype(np.int32)
         score_df = score_df[[self.user_id] + self.iid_columns]
         return score_df
 
