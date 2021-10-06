@@ -367,9 +367,13 @@ class PredictDataSet(GroupChatBaseDataSet):
 
     @property
     def to_infer_user_node_id(self):
-        user2nid = self.user2node
-        to_infer_user_id = self.to_infer_uid_df[self.user_id].tolist()
-        to_infer_node_id = [user2nid[uid] for uid in to_infer_user_id]
+
+        # If we are predicting all given users
+        if self.to_infer_uid_df.shape[0] == self.uid_map_df.shape[0]:
+            to_infer_node_id = self.uid_map_df[f'{self.user_id}_{self.new_id_suffix}'].values
+        else:
+            user2nid = self.user2node
+            to_infer_node_id = self.to_infer_uid_df[self.user_id].map(user2nid).values
         return to_infer_node_id
 
 
