@@ -179,13 +179,6 @@ class BaseDataSet:
         # TODO: resolve the index problem if we rename the item_id (hint: must include the item_embedding)
         self.train_iid_map_df = self.train_iid_map_df[[self.item_id, f'{self.item_id}_{self.new_id_suffix}']]
 
-    def _verify_all_user_feature_exist(self, user_feature, user_data_list):
-        id_set = set()
-        _ = [id_set.update(df[id_column]) for df in user_data_list
-             for id_column in self.user_ids if id_column in df.columns]
-        diff_users = id_set.difference(user_feature[self.user_id])
-        assert len(diff_users) == 0, f"There are {len(diff_users)} having no features"
-
     def load_data(self, print_summary=True):
         raise NotImplementedError
 
@@ -259,6 +252,19 @@ class GroupChatBaseDataSet(BaseDataSet, ABC):
 
         print(summary)
 
+    def _create_common_user_ids(self, user_profile, df_ad, df_group, df_label):
+        # id_columns = self.user_ids
+        # key_id = self.user_ids[0]
+        user_profile[f'{self.user_id}_{self.new_id_suffix}'] = user_profile.index
+        id_map_df = user_profile[[self.user_id, f'{self.user_id}_{self.new_id_suffix}']]
+
+        df_ad = df_ad.merge(id_map_df, on=self.user_id)
+        df_label = df_label.merge(id_map_df, on=self.user_id)
+        df_group = df_group \
+            .merge(id_map_df, on=self.user_id) \
+            .merge(id_map_df.rename(columns={'src_id': 'des_id', 'src_id_idx': 'des_id_idx'}), on='des_id')
+        return user_profile, df_ad, df_group, df_label
+
     def load_data(self, print_summary=True):
 
         user_feature, df_ad, df_group, df_label = self._load_data()
@@ -267,19 +273,11 @@ class GroupChatBaseDataSet(BaseDataSet, ABC):
             # dummy data, will not be added to data_dict later
             df_label = pd.DataFrame(columns=[self.user_id, self.item_id, 'label'])
 
-        self._verify_all_user_feature_exist(user_feature=user_feature,
-                                            user_data_list=[df_ad, df_group, df_label]
-                                            )
-
         # map src_id and des_id of different dataframes to same indices
-        (df_group, df_ad, df_label, user_feature), uid_map_df = create_common_ids(
-            [df_group, df_ad, df_label, user_feature], self.user_ids, self.new_id_suffix
-        )
+        user_feature, df_ad, df_group, df_label = self._create_common_user_ids(user_feature, df_ad, df_group, df_label)
 
         # map ad_cate of different dataframes to same indices
-        (df_ad, df_label), iid_map_df = create_common_ids([df_ad, df_label],
-                                                          [self.item_id],
-                                                          self.new_id_suffix)
+        (df_ad, df_label), iid_map_df = create_common_ids([df_ad, df_label], [self.item_id], self.new_id_suffix)
 
         # Ensure index of items in this dataset is the same as that in the training dataset
         if self.train_iid_map_df is not None:
@@ -298,10 +296,11 @@ class GroupChatBaseDataSet(BaseDataSet, ABC):
             data_dict['label_0'] = df_label[df_label['label'] == 0].reset_index(drop=True)
 
         self.data_dict = data_dict
-        self.uid_map_df = uid_map_df
+        self.uid_map_df = user_feature[[self.user_id, f'{self.user_id}_{self.new_id_suffix}']]
         self.iid_map_df = iid_map_df
 
-        user_feature = user_feature.sort_values(by=f'{self.user_id}_{self.new_id_suffix}', ascending=True)
+        # not necessary
+        # user_feature = user_feature.sort_values(by=f'{self.user_id}_{self.new_id_suffix}', ascending=True)
         uid_cols = [c for c in user_feature.columns if self.user_id in c]
         user_feature = user_feature.drop(columns=uid_cols)
         user_feature = torch.tensor(user_feature.values).float()

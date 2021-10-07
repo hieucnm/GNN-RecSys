@@ -50,6 +50,26 @@ def create_common_ids(df_list, id_columns, suffix='idx'):
     return df_list_res, id_map_df
 
 
+def create_common_user_ids(user_profile, df_list, id_columns, suffix='idx'):
+    key_id = id_columns[0]
+    user_profile[f'{key_id}_{suffix}'] = user_profile.index
+    id_map_df = user_profile[[key_id, f'{key_id}_{suffix}']]
+
+    df_list_res = []
+    for df in df_list:
+        for id_column in id_columns:
+            if id_column not in df.columns:
+                continue
+            if id_column not in id_map_df.columns:
+                df = df.merge(
+                    id_map_df.rename(columns={key_id: id_column, f'{key_id}_{suffix}': f'{id_column}_{suffix}'
+                                              }), on=id_column)
+            else:
+                df = df.merge(id_map_df, on=key_id)
+        df_list_res.append(df)
+    return user_profile, df_list_res
+
+
 def read_data(file_path):
     """
     Generic function to read any kind of data. Extensions supported: '.gz', '.csv', '.pkl'
