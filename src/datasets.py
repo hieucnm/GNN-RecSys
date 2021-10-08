@@ -252,18 +252,16 @@ class GroupChatBaseDataSet(BaseDataSet, ABC):
 
         print(summary)
 
-    def _create_common_user_ids(self, user_profile, df_ad, df_group, df_label):
-        # id_columns = self.user_ids
-        # key_id = self.user_ids[0]
-        user_profile[f'{self.user_id}_{self.new_id_suffix}'] = user_profile.index
-        id_map_df = user_profile[[self.user_id, f'{self.user_id}_{self.new_id_suffix}']]
-
-        df_ad = df_ad.merge(id_map_df, on=self.user_id)
-        df_label = df_label.merge(id_map_df, on=self.user_id)
-        df_group = df_group \
-            .merge(id_map_df, on=self.user_id) \
-            .merge(id_map_df.rename(columns={'src_id': 'des_id', 'src_id_idx': 'des_id_idx'}), on='des_id')
-        return user_profile, df_ad, df_group, df_label
+    # def _create_common_user_ids(self, user_profile, df_ad, df_group, df_label):
+    #     user_profile[f'{self.user_id}_{self.new_id_suffix}'] = user_profile.index
+    #     id_map_df = user_profile[[self.user_id, f'{self.user_id}_{self.new_id_suffix}']]
+    #
+    #     df_ad = df_ad.merge(id_map_df, on=self.user_id)
+    #     df_label = df_label.merge(id_map_df, on=self.user_id)
+    #     df_group = df_group \
+    #         .merge(id_map_df, on=self.user_id) \
+    #         .merge(id_map_df.rename(columns={'src_id': 'des_id', 'src_id_idx': 'des_id_idx'}), on='des_id')
+    #     return user_profile, df_ad, df_group, df_label
 
     def load_data(self, print_summary=True):
 
@@ -274,7 +272,14 @@ class GroupChatBaseDataSet(BaseDataSet, ABC):
             df_label = pd.DataFrame(columns=[self.user_id, self.item_id, 'label'])
 
         # map src_id and des_id of different dataframes to same indices
-        user_feature, df_ad, df_group, df_label = self._create_common_user_ids(user_feature, df_ad, df_group, df_label)
+        user_feature[f'{self.user_id}_{self.new_id_suffix}'] = user_feature.index
+        uid_map_df = user_feature[[self.user_id, f'{self.user_id}_{self.new_id_suffix}']]
+
+        df_ad = df_ad.merge(uid_map_df, on=self.user_id)
+        df_label = df_label.merge(uid_map_df, on=self.user_id)
+        df_group = df_group \
+            .merge(uid_map_df, on=self.user_id) \
+            .merge(uid_map_df.rename(columns={'src_id': 'des_id', 'src_id_idx': 'des_id_idx'}), on='des_id')
 
         # map ad_cate of different dataframes to same indices
         (df_ad, df_label), iid_map_df = create_common_ids([df_ad, df_label], [self.item_id], self.new_id_suffix)
@@ -283,7 +288,13 @@ class GroupChatBaseDataSet(BaseDataSet, ABC):
         if self.train_iid_map_df is not None:
             self._transform_train_iid_df()
             iid_map_df = self.train_iid_map_df
-            df_ad, df_label = self._use_train_iid_map([df_ad, df_label])
+            # df_ad, df_label = self._use_train_iid_map([df_ad, df_label])
+            df_ad = df_ad \
+                .drop(columns=[f'{self.item_id}_{self.new_id_suffix}']) \
+                .merge(self.train_iid_map_df, on=self.item_id)
+            df_label = df_label \
+                .drop(columns=[f'{self.item_id}_{self.new_id_suffix}']) \
+                .merge(self.train_iid_map_df, on=self.item_id)
 
         data_dict = {
             'group_chat': df_group,
@@ -296,7 +307,7 @@ class GroupChatBaseDataSet(BaseDataSet, ABC):
             data_dict['label_0'] = df_label[df_label['label'] == 0].reset_index(drop=True)
 
         self.data_dict = data_dict
-        self.uid_map_df = user_feature[[self.user_id, f'{self.user_id}_{self.new_id_suffix}']]
+        self.uid_map_df = uid_map_df  # user_feature[[self.user_id, f'{self.user_id}_{self.new_id_suffix}']]
         self.iid_map_df = iid_map_df
 
         # not necessary
@@ -356,7 +367,7 @@ class PredictDataSet(GroupChatBaseDataSet):
 
         if to_infer_uid_df is not None:
             to_infer_uid_df = to_infer_uid_df[[self.user_id]].drop_duplicates().reset_index(drop=True)
-            self._verify_all_user_feature_exist(user_feature, [to_infer_uid_df])
+            # self._verify_all_user_feature_exist(user_feature, [to_infer_uid_df])
             self.to_infer_uid_df = to_infer_uid_df
         else:
             self.to_infer_uid_df = user_feature[[self.user_id]]
