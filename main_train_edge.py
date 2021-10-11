@@ -9,7 +9,7 @@ import torch
 import torch.optim
 
 from src.dataloaders import NodeLoaderPlus, ItemNodeLoaderPlus, EdgeLoaderPlus
-from src.datasets import TrainDataSet
+from src.datasets import TrainGroupChatDataSet
 from src.evaluation import LabelBasedEvaluator
 from src.logger import Logger
 from src.losses import MaxMarginLoss, BCELossCustom
@@ -42,10 +42,7 @@ def main():
     print(f'All arguments: {args}')
 
     print("Loading training data ...")
-    train_data = TrainDataSet(data_dirs=args.train_dirs,
-                              rename_item_id=args.rename_item,
-                              use_edge_features=args.use_edge_feature)
-    train_data.load_data()
+    train_data = TrainGroupChatDataSet(data_dirs=args.train_dirs, use_edge_features=args.use_edge_feature)
     train_data.init_graph()
     train_edge_loader = EdgeLoaderPlus(graph=train_data.graph,
                                        train_graph=train_data.train_graph,
@@ -74,10 +71,9 @@ def main():
     train_ground_truth = train_node_loader.groundtruth_dict
 
     print("Loading validation data ...")
-    valid_data = TrainDataSet(data_dirs=args.valid_dirs,
-                              train_iid_map_df=train_data.iid_map_df,
-                              use_edge_features=args.use_edge_feature)
-    valid_data.load_data()
+    valid_data = TrainGroupChatDataSet(data_dirs=args.valid_dirs,
+                                       train_iid_map_df=train_data.iid_map_df,
+                                       use_edge_features=args.use_edge_feature)
     valid_data.init_graph()
     valid_edge_loader = EdgeLoaderPlus(graph=valid_data.graph,
                                        train_graph=valid_data.train_graph,
