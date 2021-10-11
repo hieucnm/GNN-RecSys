@@ -21,7 +21,7 @@ warnings.filterwarnings('ignore')
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 # device = torch.device('cpu')  # to debug
 
-ADS_TO_TRACK = [20018, 20255]
+ADS_TO_TRACK = [20018, 20255, 20147]
 
 
 def get_report(auc_dict, item2nid, loss=None):
