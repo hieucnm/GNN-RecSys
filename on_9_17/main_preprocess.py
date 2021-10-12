@@ -22,10 +22,10 @@ DATA_NAMES = ['ad_form_d30', 'group_chat_d07', 'user_profile']
 
 parser = argparse.ArgumentParser("Graph Deployment")
 parser.add_argument('--hdfs-dir', type=str, help='', default=HDFS_PROJECT_DIR + '/inference_data/history/{}/%Y/%m/%d')
-parser.add_argument('--local-dir', type=str, help='', default=PROJECT_DIR + '/data/test/history/{}/%Y/%m/%d')
-parser.add_argument('--preprocessed-dir', type=str, help='', default=f'{PROJECT_DIR}/data/test/preprocessed/%Y/%m/%d')
-parser.add_argument('--metadata-path', type=str, help='', default=f'{PROJECT_DIR}/data/test/metadata.pkl')
-parser.add_argument('--iid-map-path', type=str, help='', default=f'{PROJECT_DIR}/data/test/train_iid_map_df.csv')
+parser.add_argument('--local-dir', type=str, help='', default=PROJECT_DIR + '/data/history/{}/%Y/%m/%d')
+parser.add_argument('--preprocessed-dir', type=str, help='', default=f'{PROJECT_DIR}/data/preprocessed/%Y/%m/%d')
+parser.add_argument('--metadata-path', type=str, help='', default=f'{PROJECT_DIR}/data/metadata.pkl')
+parser.add_argument('--iid-map-path', type=str, help='', default=f'{PROJECT_DIR}/data/train_iid_map_df.csv')
 parser.add_argument('--duration', type=int, help='', default=7)
 parser.add_argument('--weekday', type=int, help='', default=5)
 
@@ -40,9 +40,10 @@ def wrapup_get_data():
                 .write.parquet("file://" + date.strftime(args.local_dir).format(data_name))
             print(f'--> saved {data_name}')
         spark.stop()
-    except:
+    except Exception as e:
         if spark is not None:
             spark.stop()
+        print(e)
 
 
 def wrapup_preprocess_data():
