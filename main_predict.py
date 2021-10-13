@@ -28,9 +28,9 @@ parser.add_argument('--duration', type=int, help='', default=7)
 parser.add_argument('--weekday', type=int, help='', default=5)
 parser.add_argument('--date', type=str, help='', default='2021-09-11')
 parser.add_argument('--input-9-17', type=str,
-                    default='/data/zmining/jupyter-hub/hieucnm/graph/test_deploy_local/data/preprocessed/%Y/%m/%d')
+                    default='/data/zmining/jupyter-hub/hieucnm/graph/deploy_local/data/preprocessed/%Y/%m/%d')
 parser.add_argument('--output-9-17', type=str,
-                    default='/data/zmining/hieucnm/graph/test_deploy_local/outputs/predict/{}/%Y/%m/%d')
+                    default='/data/zmining/hieucnm/graph/deploy_local/outputs/predict/{}/%Y/%m/%d')
 
 
 def predict():

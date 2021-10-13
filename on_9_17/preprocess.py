@@ -15,7 +15,7 @@ from common.spark_processing import init_spark
 from common.io import mkdir_if_missing
 
 
-PROJECT_DIR = '/data/zmining/jupyter-hub/hieucnm/graph/test_deploy_local'
+PROJECT_DIR = '/data/zmining/jupyter-hub/hieucnm/graph/deploy_local'
 HDFS_PROJECT_DIR = '/data/jobs/rnd/development/hieucnm/graph/v5__with_edge_features'
 DATA_NAMES = ['ad_form_d30', 'group_chat_d07', 'user_profile']
 

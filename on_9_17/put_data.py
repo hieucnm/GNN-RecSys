@@ -16,7 +16,7 @@ DATA_NAMES = ['user_embeddings', 'item_embeddings', 'scores']
 parser = argparse.ArgumentParser("Graph Deployment")
 parser.add_argument('--hdfs-dir', type=str, help='', default=HDFS_PROJECT_DIR + '/outputs/predict/{}/%Y/%m/%d')
 parser.add_argument('--local-dir', type=str, help='',
-                    default='/data/zmining/hieucnm/graph/test_deploy_local/outputs/predict/{}/%Y/%m/%d')
+                    default='/data/zmining/hieucnm/graph/deploy_local/outputs/predict/{}/%Y/%m/%d')
 parser.add_argument('--duration', type=int, help='', default=7)
 parser.add_argument('--weekday', type=int, help='', default=5)
 parser.add_argument('--date', type=str, help='', default='2021-09-11')
@@ -36,8 +36,10 @@ def hdfs_path_exists(spark, path):
 
 def put_data(spark):
     for data_name in DATA_NAMES:
-        spark.read.parquet(local_dir.format(data_name)) \
-            .write.parquet(hdfs_dir.format(data_name))
+        df = spark.read.parquet(local_dir.format(data_name))
+        if "__index_level_0__" in df.columns:
+            df = df.drop("__index_level_0__")
+        df.write.parquet(hdfs_dir.format(data_name))
         print(f'--> saved {hdfs_dir.format(data_name)}')
 
 
