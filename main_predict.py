@@ -26,6 +26,7 @@ parser.add_argument('--model-file', help='Model file to load, exists in `train_o
 parser.add_argument('--node-batch-size', type=int, default=2**16, help='Number of nodes in a batch')
 parser.add_argument('--duration', type=int, help='', default=7)
 parser.add_argument('--weekday', type=int, help='', default=5)
+parser.add_argument('--date', type=str, help='', default='2021-09-11')
 parser.add_argument('--input-9-17', type=str,
                     default='/data/zmining/jupyter-hub/hieucnm/graph/test_deploy_local/data/preprocessed/%Y/%m/%d')
 parser.add_argument('--output-9-17', type=str,
@@ -155,7 +156,7 @@ def main():
 
 if __name__ == '__main__':
     args = parser.parse_args()
-    date = pd.date_range("2021-09-11", periods=1)[0]  # TODO: change to dt.datetime.today()
+    date = dt.datetime.today() if args.date == '' else dt.datetime.strptime(args.date, "%Y-%m-%d")
     date = [d for d in pd.date_range(end=date, periods=args.duration) if d.weekday() == args.weekday][0]
     print('On date:', date)
 

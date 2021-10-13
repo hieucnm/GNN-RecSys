@@ -28,16 +28,19 @@ parser.add_argument('--metadata-path', type=str, help='', default=f'{PROJECT_DIR
 parser.add_argument('--iid-map-path', type=str, help='', default=f'{PROJECT_DIR}/data/train_iid_map_df.csv')
 parser.add_argument('--duration', type=int, help='', default=7)
 parser.add_argument('--weekday', type=int, help='', default=5)
+parser.add_argument('--date', type=str, help='', default='2021-09-11')
 
 
-def wrapup_get_data():
+def get_data():
     # use try/catch to stop spark in case any error occurs
+    local_dir = 'file://' + date.strftime(args.local_dir)
+    hdfs_dir = date.strftime(args.hdfs_dir)
     spark = None
     try:
         spark = init_spark(n_ram=64)
         for data_name in DATA_NAMES:
-            spark.read.parquet(date.strftime(args.hdfs_dir).format(data_name)) \
-                .write.parquet("file://" + date.strftime(args.local_dir).format(data_name))
+            spark.read.parquet(hdfs_dir.format(data_name)) \
+                .write.parquet(local_dir.format(data_name))
             print(f'--> saved {data_name}')
         spark.stop()
     except Exception as e:
@@ -133,7 +136,7 @@ def main():
     if not os.path.exists(f'{date.strftime(args.preprocessed_dir)}/user_profile.parquet'):
         if not os.path.exists(date.strftime(args.local_dir).format(DATA_NAMES[0])):
             print('Getting data from hdfs to local ...')
-            wrapup_get_data()
+            get_data()
             gc.collect()
 
         print('Preprocessing data on local ...')
@@ -149,8 +152,8 @@ def main():
 
 if __name__ == '__main__':
     args = parser.parse_args()
-    date = pd.date_range("2021-09-11", periods=1)[0]  # dt.datetime.today()
+    date = dt.datetime.today() if args.date == '' else dt.datetime.strptime(args.date, "%Y-%m-%d")
     date = [d for d in pd.date_range(end=date, periods=args.duration) if d.weekday() == args.weekday][0]
     print(f'On date: {date}')
-    main()
 
+    main()
