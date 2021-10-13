@@ -6,7 +6,7 @@ import warnings
 import numpy as np
 import pandas as pd
 import torch
-from tqdm._tqdm import tqdm
+from tqdm.std import tqdm
 from dgl import load_graphs
 from dgl.dataloading import MultiLayerNeighborSampler, NodeDataLoader
 from src.models import ConvModel
@@ -26,6 +26,10 @@ parser.add_argument('--model-file', help='Model file to load, exists in `train_o
 parser.add_argument('--node-batch-size', type=int, default=2**16, help='Number of nodes in a batch')
 parser.add_argument('--duration', type=int, help='', default=7)
 parser.add_argument('--weekday', type=int, help='', default=5)
+parser.add_argument('--input-9-17', type=str,
+                    default='/data/zmining/jupyter-hub/hieucnm/graph/test_deploy_local/data/preprocessed/%Y/%m/%d')
+parser.add_argument('--output-9-17', type=str,
+                    default='/data/zmining/hieucnm/graph/test_deploy_local/outputs/predict/{}/%Y/%m/%d')
 
 
 def predict():
@@ -106,15 +110,47 @@ def predict():
     print(f'Finish training! Elapsed time: {dt.datetime.now().replace(microsecond=0) - start_time}')
 
 
+def rsync_data():
+    start_time = dt.datetime.now().replace(microsecond=0)
+    mkdir_if_missing(data_dir, _type='dir')
+    print('Rsyncing data from 9.17 ...')
+    for file_name in ['uid_map_df.parquet', 'graph.bin']:
+        command = f"rsync -aurv zdeploy@10.50.9.17:{input_9_17}/{file_name} {data_dir}/{file_name}"
+        print('--> running command:', command)
+        os.system(command)
+    print(f'Finish rsyncing! Elapsed time: {dt.datetime.now().replace(microsecond=0) - start_time}')
+
+
+def rsync_output():
+    start_time = dt.datetime.now().replace(microsecond=0)
+    print('Rsyncing outputs to 9.17 ...')
+
+    # first, rsync the item embeddings dataframe
+    des_dir = output_9_17.format('item_embeddings')
+    src_file = f'{args.train_output_dir}/metadata/item_embedding.parquet'
+    command = f'rsync -aurv --rsync-path="mkdir -p {des_dir}/ && rsync" {src_file} zdeploy@10.50.9.17:{des_dir}/'
+    print('--> running command:', command)
+    os.system(command)
+
+    # now, rsync the user embeddings & cosine similarity scores
+    for dir_name in ['user_embeddings', 'scores']:
+        src_dir = f'{result_dir}/{dir_name}'
+        des_dir = output_9_17.format(dir_name)
+        command = f'rsync -aurv --rsync-path="mkdir -p {des_dir} && rsync" {src_dir}/* zdeploy@10.50.9.17:{des_dir}'
+        print('--> running command:', command)
+        os.system(command)
+    print(f'Finish rsyncing! Elapsed time: {dt.datetime.now().replace(microsecond=0) - start_time}')
+
+
 def main():
     user_embed_path = f'{result_dir}/user_embeddings'
     if os.path.exists(user_embed_path) and len(os.listdir(user_embed_path)) > 0:
         print("Outputs exist! Finish!")
         return
-
     if not os.path.exists(data_dir):
-        print('Rsync data from 9.17 ... ')  # TODO: Get data from 9.17
+        rsync_data()
     predict()
+    rsync_output()
 
 
 if __name__ == '__main__':
@@ -125,4 +161,7 @@ if __name__ == '__main__':
 
     result_dir = date.strftime(args.result_dir)
     data_dir = date.strftime(args.data_dir)
+    input_9_17 = date.strftime(args.input_9_17)
+    output_9_17 = date.strftime(args.output_9_17)
+
     main()
